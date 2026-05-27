@@ -60,6 +60,8 @@ final class AppSettings: ObservableObject {
         ("玫瑰粉", Color.pink.opacity(0.14)),
         ("薰衣紫", Color.purple.opacity(0.14)),
         ("石墨灰", Color.gray.opacity(0.18)),
+        ("淡橙", Color.orange.opacity(0.14)),
+        ("靛蓝", Color.indigo.opacity(0.14)),
         ("自定义", Color.clear),
     ]
 

@@ -6,6 +6,7 @@ struct SettingsView: View {
     @ObservedObject private var holidayStore = HolidayStore.shared
     @State private var selectedTab = 0
     @State private var settingsWindow: NSWindow?
+    @State private var showCustomColorPopover = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -188,8 +189,6 @@ struct SettingsView: View {
             VStack(alignment: .leading, spacing: 16) {
                 settingsSection("背景图片") {
                     VStack(alignment: .leading, spacing: 10) {
-                        backgroundPreview
-
                         HStack(spacing: 8) {
                             Button {
                                 BackgroundImageStore.chooseImage(attachedTo: settingsWindow, for: settings)
@@ -212,60 +211,7 @@ struct SettingsView: View {
                 }
 
                 settingsSection("背景颜色") {
-                    LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                        ForEach(0 ..< AppSettings.backgroundColors.count, id: \.self) { index in
-                            let background = AppSettings.backgroundColors[index]
-                            let color = index == AppSettings.customBackgroundColorIndex ? settings.currentCustomBackgroundColor : background.color
-                            VStack(spacing: 4) {
-                                ZStack {
-                                    Circle()
-                                        .fill(color)
-                                        .frame(width: 30, height: 30)
-                                        .overlay(
-                                            Circle()
-                                                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-                                        )
-
-                                    if settings.backgroundColorIndex == index {
-                                        Image(systemName: "checkmark")
-                                            .font(.system(size: 12, weight: .bold))
-                                            .foregroundColor(index <= 1 || index == AppSettings.customBackgroundColorIndex ? .primary : .white)
-                                    }
-                                }
-
-                                Text(background.name)
-                                    .font(.system(size: 9))
-                                    .foregroundColor(.secondary)
-                                    .lineLimit(1)
-                            }
-                            .frame(maxWidth: .infinity)
-                            .contentShape(Rectangle())
-                            .onTapGesture { settings.backgroundColorIndex = index }
-                        }
-                    }
-
-                    HStack(spacing: 8) {
-                        Text("ARGB")
-                            .foregroundColor(.secondary)
-                            .frame(width: 42, alignment: .leading)
-
-                        TextField("FFFFFFFF", text: customARGBBinding)
-                            .textFieldStyle(.roundedBorder)
-                            .font(.system(size: 12).monospaced())
-                            .frame(width: 120)
-
-                        RoundedRectangle(cornerRadius: 4)
-                            .fill(settings.currentCustomBackgroundColor)
-                            .frame(width: 28, height: 22)
-                            .overlay(
-                                RoundedRectangle(cornerRadius: 4)
-                                    .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
-                            )
-
-                        Text("AARRGGBB")
-                            .font(.system(size: 10))
-                            .foregroundColor(.secondary)
-                    }
+                    backgroundColorGrid
                 }
 
                 settingsSection("透明度") {
@@ -295,6 +241,19 @@ struct SettingsView: View {
                 }
             }
         }
+        .onAppear {
+            BackgroundPreviewWindowController.shared.startObserving()
+        }
+        .onDisappear {
+            BackgroundPreviewWindowController.shared.stopObserving()
+        }
+        .onChange(of: settings.backgroundImagePath) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundColorIndex) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundCustomARGB) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundOpacity) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundOffsetX) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundOffsetY) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundScale) { _ in BackgroundPreviewWindowController.shared.showPreview() }
     }
 
     // MARK: - Helper
@@ -309,22 +268,182 @@ struct SettingsView: View {
         }
     }
 
-    private var backgroundPreview: some View {
-        GeometryReader { proxy in
-            let scale = proxy.size.width / 360
+    private var backgroundColorGrid: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
+                ForEach(0 ..< AppSettings.backgroundColors.count, id: \.self) { index in
+                    let background = AppSettings.backgroundColors[index]
+                    let isCustom = index == AppSettings.customBackgroundColorIndex
 
-            CalendarView()
-                .frame(width: 360, alignment: .topLeading)
-                .scaleEffect(scale, anchor: .topLeading)
-                .allowsHitTesting(false)
+                    if isCustom {
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle()
+                                    .fill(
+                                        AngularGradient(
+                                            gradient: Gradient(colors: [
+                                                .red, .orange, .yellow, .green, .cyan, .blue, .purple, .pink, .red,
+                                            ]),
+                                            center: .center
+                                        )
+                                    )
+                                    .frame(width: 30, height: 30)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                                    )
+
+                                if settings.backgroundColorIndex == index {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(.white)
+                                        .shadow(color: .black.opacity(0.5), radius: 1)
+                                }
+                            }
+
+                            Text("自定义")
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture {
+                            settings.backgroundColorIndex = index
+                            showCustomColorPopover = true
+                        }
+                        .popover(isPresented: $showCustomColorPopover, arrowEdge: .bottom) {
+                            customColorPopoverContent
+                        }
+                    } else {
+                        VStack(spacing: 4) {
+                            ZStack {
+                                Circle()
+                                    .fill(background.color)
+                                    .frame(width: 30, height: 30)
+                                    .overlay(
+                                        Circle()
+                                            .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                                    )
+
+                                if settings.backgroundColorIndex == index {
+                                    Image(systemName: "checkmark")
+                                        .font(.system(size: 12, weight: .bold))
+                                        .foregroundColor(index <= 1 ? .primary : .white)
+                                }
+                            }
+
+                            Text(background.name)
+                                .font(.system(size: 9))
+                                .foregroundColor(.secondary)
+                                .lineLimit(1)
+                        }
+                        .frame(maxWidth: .infinity)
+                        .contentShape(Rectangle())
+                        .onTapGesture { settings.backgroundColorIndex = index }
+                    }
+                }
+            }
         }
-        .aspectRatio(360 / 410, contentMode: .fit)
-        .frame(maxWidth: 260)
-        .frame(maxWidth: .infinity, alignment: .leading)
-        .clipShape(RoundedRectangle(cornerRadius: 6))
-        .overlay(
+    }
+
+    private var customColorPopoverContent: some View {
+        VStack(spacing: 14) {
+            Text("自定义背景颜色")
+                .font(.system(size: 13, weight: .medium))
+
+            ColorPicker("颜色", selection: customColorBinding, supportsOpacity: false)
+                .labelsHidden()
+                .frame(height: 30)
+
+            VStack(spacing: 6) {
+                Text("透明度")
+                    .font(.system(size: 11))
+                    .foregroundColor(.secondary)
+                HStack {
+                    Slider(value: customAlphaBinding, in: 0...1)
+                    Text("\(Int(customAlphaBinding.wrappedValue * 100))%")
+                        .font(.system(size: 11).monospacedDigit())
+                        .foregroundColor(.secondary)
+                        .frame(width: 36, alignment: .trailing)
+                }
+            }
+
             RoundedRectangle(cornerRadius: 6)
-                .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                .fill(settings.currentCustomBackgroundColor)
+                .frame(height: 30)
+                .overlay(
+                    RoundedRectangle(cornerRadius: 6)
+                        .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
+                )
+
+            HStack(spacing: 8) {
+                Text("ARGB")
+                    .foregroundColor(.secondary)
+                    .font(.system(size: 11))
+
+                TextField("FFFFFFFF", text: customARGBBinding)
+                    .textFieldStyle(.roundedBorder)
+                    .font(.system(size: 12).monospaced())
+                    .frame(width: 100)
+            }
+        }
+        .padding(16)
+        .frame(width: 240)
+    }
+
+    private var customColorBinding: Binding<Color> {
+        Binding(
+            get: {
+                let argb = settings.backgroundCustomARGB
+                guard argb.count == 8, let value = UInt32(argb, radix: 16) else {
+                    return Color.white
+                }
+                let r = Double((value >> 16) & 0xFF) / 255
+                let g = Double((value >> 8) & 0xFF) / 255
+                let b = Double(value & 0xFF) / 255
+                return Color(red: r, green: g, blue: b)
+            },
+            set: { newColor in
+                let nsColor = NSColor(newColor).usingColorSpace(.deviceRGB) ?? NSColor.white
+                let r = Int(nsColor.redComponent * 255)
+                let g = Int(nsColor.greenComponent * 255)
+                let b = Int(nsColor.blueComponent * 255)
+                let currentARGB = settings.backgroundCustomARGB
+                let a: Int
+                if currentARGB.count == 8, let val = UInt32(currentARGB, radix: 16) {
+                    a = Int((val >> 24) & 0xFF)
+                } else {
+                    a = 255
+                }
+                settings.backgroundCustomARGB = String(format: "%02X%02X%02X%02X", a, r, g, b)
+                settings.backgroundColorIndex = AppSettings.customBackgroundColorIndex
+            }
+        )
+    }
+
+    private var customAlphaBinding: Binding<Double> {
+        Binding(
+            get: {
+                let argb = settings.backgroundCustomARGB
+                guard argb.count == 8, let value = UInt32(argb, radix: 16) else {
+                    return 1.0
+                }
+                return Double((value >> 24) & 0xFF) / 255
+            },
+            set: { newAlpha in
+                let currentARGB = settings.backgroundCustomARGB
+                let a = Int(newAlpha * 255)
+                if currentARGB.count == 8, let val = UInt32(currentARGB, radix: 16) {
+                    let r = Int((val >> 16) & 0xFF)
+                    let g = Int((val >> 8) & 0xFF)
+                    let b = Int(val & 0xFF)
+                    settings.backgroundCustomARGB = String(format: "%02X%02X%02X%02X", a, r, g, b)
+                } else {
+                    settings.backgroundCustomARGB = String(format: "%02XFFFFFF", a)
+                }
+                settings.backgroundColorIndex = AppSettings.customBackgroundColorIndex
+            }
         )
     }
 
