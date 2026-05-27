@@ -4,69 +4,105 @@ import SwiftUI
 
 struct CalendarView: View {
     @StateObject private var vm = CalendarViewModel()
+    @ObservedObject private var settings = AppSettings.shared
+    @State private var showSettings = false
 
-    private let columns = Array(repeating: GridItem(.flexible(), spacing: 2), count: 7)
-    private let weekdays = ["日", "一", "二", "三", "四", "五", "六"]
+    private var columns: [GridItem] {
+        Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
+    }
 
     var body: some View {
-        VStack(spacing: 8) {
+        VStack(spacing: 0) {
             headerView
+                .padding(.horizontal, 12)
+                .padding(.top, 10)
+                .padding(.bottom, 6)
+
             weekdayHeader
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
+
             daysGrid
-            if let info = vm.selectedHolidayInfo {
-                holidayBanner(info)
-            }
+                .padding(.horizontal, 8)
+
+            Divider()
+                .padding(.top, 6)
+
+            bottomBar
+                .padding(.horizontal, 12)
+                .padding(.vertical, 8)
         }
-        .padding(12)
-        .frame(width: 340, height: 400)
+        .frame(width: 360)
         .background(Color(NSColor.windowBackgroundColor))
+        .sheet(isPresented: $showSettings) {
+            SettingsView()
+        }
+        .onChange(of: settings.weekStartsOn) { _ in vm.updateWeekStart(settings.weekStartsOn) }
     }
 
     // MARK: - Header
 
     private var headerView: some View {
-        HStack {
+        HStack(spacing: 8) {
+            // Year picker
+            Picker("", selection: Binding(
+                get: { vm.displayedYear },
+                set: { vm.setYear($0) }
+            )) {
+                ForEach(vm.yearRange, id: \.self) { year in
+                    Text("\(year)年").tag(year)
+                }
+            }
+            .frame(width: 80)
+            .labelsHidden()
+
+            Spacer()
+
+            // Month navigation
             Button(action: { vm.moveToPreviousMonth() }) {
                 Image(systemName: "chevron.left")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(settings.currentThemeColor)
             }
             .buttonStyle(.plain)
 
-            Spacer()
-
-            Text(vm.monthYearTitle)
-                .font(.system(size: 16, weight: .bold))
-
-            Spacer()
-
-            Button(action: { vm.goToToday() }) {
-                Text("今天")
-                    .font(.system(size: 12))
-                    .padding(.horizontal, 8)
-                    .padding(.vertical, 3)
-                    .background(Color.accentColor.opacity(0.15))
-                    .cornerRadius(4)
-            }
-            .buttonStyle(.plain)
+            Text(vm.monthTitle)
+                .font(.system(size: 15, weight: .bold))
+                .frame(minWidth: 50)
 
             Button(action: { vm.moveToNextMonth() }) {
                 Image(systemName: "chevron.right")
-                    .font(.system(size: 14, weight: .semibold))
+                    .font(.system(size: 13, weight: .semibold))
+                    .foregroundColor(settings.currentThemeColor)
+            }
+            .buttonStyle(.plain)
+
+            Spacer()
+
+            // Go to today
+            Button(action: { vm.goToToday() }) {
+                Text("返回今天")
+                    .font(.system(size: 11))
+                    .padding(.horizontal, 8)
+                    .padding(.vertical, 4)
+                    .background(settings.currentThemeColor.opacity(0.12))
+                    .foregroundColor(settings.currentThemeColor)
+                    .cornerRadius(4)
             }
             .buttonStyle(.plain)
         }
-        .padding(.horizontal, 4)
     }
 
     // MARK: - Weekday Header
 
     private var weekdayHeader: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
-            ForEach(weekdays, id: \.self) { day in
-                Text(day)
-                    .font(.system(size: 12, weight: .medium))
-                    .foregroundColor(day == "日" || day == "六" ? .red.opacity(0.7) : .secondary)
+        LazyVGrid(columns: columns, spacing: 1) {
+            ForEach(vm.weekdaySymbols, id: \.self) { symbol in
+                Text(symbol)
+                    .font(.system(size: 11, weight: .medium))
+                    .foregroundColor(symbol == "周六" || symbol == "周日" ? .red.opacity(0.7) : .secondary)
                     .frame(maxWidth: .infinity)
+                    .frame(height: 20)
             }
         }
     }
@@ -74,31 +110,51 @@ struct CalendarView: View {
     // MARK: - Days Grid
 
     private var daysGrid: some View {
-        LazyVGrid(columns: columns, spacing: 2) {
+        LazyVGrid(columns: columns, spacing: 1) {
             ForEach(vm.days) { day in
-                DayCellView(day: day, isSelected: vm.selectedDate == day.date)
-                    .onTapGesture { vm.select(day) }
+                DayCellView(
+                    day: day,
+                    isSelected: vm.selectedDate == day.date,
+                    themeColor: settings.currentThemeColor
+                )
+                .onTapGesture { vm.select(day) }
             }
         }
     }
 
-    // MARK: - Holiday Banner
+    // MARK: - Bottom Bar
 
-    private func holidayBanner(_ info: HolidayInfo) -> some View {
-        HStack(spacing: 6) {
-            Text(info.emoji)
-                .font(.system(size: 16))
-            Text(info.name)
-                .font(.system(size: 13, weight: .medium))
-                .foregroundColor(.primary)
+    private var bottomBar: some View {
+        HStack(spacing: 0) {
+            VStack(alignment: .leading, spacing: 2) {
+                HStack(spacing: 6) {
+                    Text(vm.currentTimeString)
+                        .font(.system(size: 14, weight: .medium).monospacedDigit())
+                    Text(vm.currentWeekdayString)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+                HStack(spacing: 6) {
+                    Text(vm.currentDateString)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                    Text(vm.currentLunarString)
+                        .font(.system(size: 12))
+                        .foregroundColor(.secondary)
+                }
+            }
+
             Spacer()
-            Text("法定节假日")
-                .font(.system(size: 11))
-                .foregroundColor(.secondary)
+
+            Button(action: { showSettings.toggle() }) {
+                Image(systemName: "gearshape")
+                    .font(.system(size: 16))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
         }
-        .padding(8)
-        .background(Color.red.opacity(0.08))
-        .cornerRadius(8)
     }
 }
 
@@ -107,27 +163,48 @@ struct CalendarView: View {
 struct DayCellView: View {
     let day: DayItem
     let isSelected: Bool
+    let themeColor: Color
 
     var body: some View {
-        VStack(spacing: 1) {
-            ZStack {
-                if day.isToday {
-                    Circle()
-                        .fill(Color.accentColor)
-                        .frame(width: 30, height: 30)
+        ZStack(alignment: .topLeading) {
+            // Background fill for holiday/workday
+            if day.isCurrentMonth {
+                if day.holidayInfo != nil {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.green.opacity(0.12))
+                } else if day.isCompensatoryWorkday {
+                    RoundedRectangle(cornerRadius: 4)
+                        .fill(Color.orange.opacity(0.12))
                 }
-                if isSelected && !day.isToday {
-                    Circle()
-                        .stroke(Color.accentColor, lineWidth: 1.5)
-                        .frame(width: 30, height: 30)
-                }
+            }
 
+            // Selection / today indicator
+            if day.isToday {
+                RoundedRectangle(cornerRadius: 4)
+                    .fill(themeColor.opacity(0.15))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 4)
+                            .stroke(themeColor, lineWidth: 1.5)
+                    )
+            } else if isSelected {
+                RoundedRectangle(cornerRadius: 4)
+                    .stroke(themeColor.opacity(0.5), lineWidth: 1)
+            }
+
+            // Content
+            VStack(spacing: 1) {
                 Text("\(day.dayNumber)")
                     .font(.system(size: 14, weight: day.isToday ? .bold : .regular))
                     .foregroundColor(dayTextColor)
-            }
 
-            // Holiday/workday indicator
+                Text(day.lunarText)
+                    .font(.system(size: 9))
+                    .foregroundColor(lunarTextColor)
+                    .lineLimit(1)
+            }
+            .frame(maxWidth: .infinity, maxHeight: .infinity)
+
+            // Holiday/workday badge at top-left
             if day.isCurrentMonth {
                 if day.holidayInfo != nil {
                     Text("休")
@@ -136,6 +213,7 @@ struct DayCellView: View {
                         .frame(width: 14, height: 14)
                         .background(Color.green)
                         .cornerRadius(2)
+                        .offset(x: 1, y: 1)
                 } else if day.isCompensatoryWorkday {
                     Text("班")
                         .font(.system(size: 8, weight: .bold))
@@ -143,23 +221,25 @@ struct DayCellView: View {
                         .frame(width: 14, height: 14)
                         .background(Color.orange)
                         .cornerRadius(2)
-                } else {
-                    Color.clear.frame(width: 14, height: 14)
+                        .offset(x: 1, y: 1)
                 }
-            } else {
-                Color.clear.frame(width: 14, height: 14)
             }
         }
-        .frame(maxWidth: .infinity, minHeight: 44)
+        .frame(maxWidth: .infinity, minHeight: 48)
         .contentShape(Rectangle())
     }
 
     private var dayTextColor: Color {
-        if day.isToday { return .white }
-        if !day.isCurrentMonth { return .secondary.opacity(0.4) }
+        if !day.isCurrentMonth { return .secondary.opacity(0.3) }
+        if day.isToday { return themeColor }
         if day.holidayInfo != nil { return .green }
         if day.isWeekend && !day.isCompensatoryWorkday { return .red.opacity(0.7) }
         return .primary
+    }
+
+    private var lunarTextColor: Color {
+        if !day.isCurrentMonth { return .secondary.opacity(0.2) }
+        return .secondary.opacity(0.7)
     }
 }
 
