@@ -1,5 +1,6 @@
 import AppKit
 import SwiftUI
+import UniformTypeIdentifiers
 
 struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
@@ -7,13 +8,14 @@ struct SettingsView: View {
     @State private var selectedTab = 0
     @State private var settingsWindow: NSWindow?
     @State private var showCustomColorPopover = false
+    @State private var draggedStatusItem: StatusBarItemKind?
 
     var body: some View {
         VStack(spacing: 0) {
             // Tab bar
             HStack(spacing: 0) {
                 tabButton("通用", icon: "gearshape", tag: 0)
-                tabButton("样式", icon: "paintpalette", tag: 1)
+                tabButton("色调", icon: "paintpalette", tag: 1)
                 tabButton("状态栏", icon: "menubar.rectangle", tag: 2)
                 tabButton("背景", icon: "photo", tag: 3)
             }
@@ -37,6 +39,8 @@ struct SettingsView: View {
         .frame(width: 420, height: 460)
         .background(Color(NSColor.windowBackgroundColor))
         .background(WindowReader(window: $settingsWindow))
+        .onChange(of: settings.accentColorIndex) { _ in BackgroundPreviewWindowController.shared.showPreview() }
+        .onChange(of: settings.backgroundCustomARGB) { _ in BackgroundPreviewWindowController.shared.showPreview() }
     }
 
     // MARK: - Tab Button
@@ -120,34 +124,13 @@ struct SettingsView: View {
 
     private var styleTab: some View {
         VStack(alignment: .leading, spacing: 16) {
-            Text("主题颜色")
+            Text("选择色调")
                 .font(.system(size: 13, weight: .medium))
                 .foregroundColor(.secondary)
 
-            LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 12), count: 6), spacing: 12) {
-                ForEach(0 ..< AppSettings.themeColors.count, id: \.self) { index in
-                    let theme = AppSettings.themeColors[index]
-                    ZStack {
-                        Circle()
-                            .fill(theme.color)
-                            .frame(width: 36, height: 36)
+            themeColorGrid
 
-                        if settings.accentColorIndex == index {
-                            Image(systemName: "checkmark")
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.white)
-                        }
-                    }
-                    .onTapGesture { settings.accentColorIndex = index }
-                    .overlay(
-                        Circle()
-                            .stroke(settings.accentColorIndex == index ? theme.color : Color.clear, lineWidth: 2)
-                            .frame(width: 42, height: 42)
-                    )
-                }
-            }
-
-            Text(AppSettings.themeColors[max(0, min(settings.accentColorIndex, AppSettings.themeColors.count - 1))].name)
+            Text("文字强调、选中态和背景浅色会从所选色调自动派生。")
                 .font(.system(size: 12))
                 .foregroundColor(.secondary)
                 .frame(maxWidth: .infinity, alignment: .center)
@@ -177,6 +160,10 @@ struct SettingsView: View {
                     Toggle("显示农历", isOn: $settings.showLunarInStatusBar)
                     Toggle("显示阳历", isOn: $settings.showSolarInStatusBar)
                     Toggle("显示星期几", isOn: $settings.showWeekdayInStatusBar)
+                }
+
+                settingsSection("显示顺序") {
+                    statusBarOrderView
                 }
             }
         }
@@ -208,10 +195,6 @@ struct SettingsView: View {
                             .font(.system(size: 10))
                             .foregroundColor(.secondary)
                     }
-                }
-
-                settingsSection("背景颜色") {
-                    backgroundColorGrid
                 }
 
                 settingsSection("透明度") {
@@ -248,8 +231,6 @@ struct SettingsView: View {
             BackgroundPreviewWindowController.shared.stopObserving()
         }
         .onChange(of: settings.backgroundImagePath) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundColorIndex) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundCustomARGB) { _ in BackgroundPreviewWindowController.shared.showPreview() }
         .onChange(of: settings.backgroundOpacity) { _ in BackgroundPreviewWindowController.shared.showPreview() }
         .onChange(of: settings.backgroundOffsetX) { _ in BackgroundPreviewWindowController.shared.showPreview() }
         .onChange(of: settings.backgroundOffsetY) { _ in BackgroundPreviewWindowController.shared.showPreview() }
@@ -268,12 +249,13 @@ struct SettingsView: View {
         }
     }
 
-    private var backgroundColorGrid: some View {
+    private var themeColorGrid: some View {
         VStack(alignment: .leading, spacing: 10) {
             LazyVGrid(columns: Array(repeating: GridItem(.flexible(), spacing: 10), count: 6), spacing: 10) {
-                ForEach(0 ..< AppSettings.backgroundColors.count, id: \.self) { index in
-                    let background = AppSettings.backgroundColors[index]
-                    let isCustom = index == AppSettings.customBackgroundColorIndex
+                ForEach(0 ..< AppSettings.themeColors.count, id: \.self) { index in
+                    let theme = AppSettings.themeColors[index]
+                    let isCustom = index == AppSettings.customThemeColorIndex
+                    let presetColor = isCustom ? settings.currentCustomBackgroundColor : (AppSettings.color(fromARGB: theme.argb) ?? Color.blue)
 
                     if isCustom {
                         VStack(spacing: 4) {
@@ -293,7 +275,7 @@ struct SettingsView: View {
                                             .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
                                     )
 
-                                if settings.backgroundColorIndex == index {
+                                if settings.accentColorIndex == index {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 12, weight: .bold))
                                         .foregroundColor(.white)
@@ -309,7 +291,7 @@ struct SettingsView: View {
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
                         .onTapGesture {
-                            settings.backgroundColorIndex = index
+                            settings.accentColorIndex = index
                             showCustomColorPopover = true
                         }
                         .popover(isPresented: $showCustomColorPopover, arrowEdge: .bottom) {
@@ -319,37 +301,91 @@ struct SettingsView: View {
                         VStack(spacing: 4) {
                             ZStack {
                                 Circle()
-                                    .fill(background.color)
+                                    .fill(presetColor)
                                     .frame(width: 30, height: 30)
                                     .overlay(
                                         Circle()
                                             .stroke(Color.secondary.opacity(0.25), lineWidth: 1)
                                     )
 
-                                if settings.backgroundColorIndex == index {
+                                if settings.accentColorIndex == index {
                                     Image(systemName: "checkmark")
                                         .font(.system(size: 12, weight: .bold))
-                                        .foregroundColor(index <= 1 ? .primary : .white)
+                                        .foregroundColor(.white)
+                                        .shadow(color: .black.opacity(0.35), radius: 1)
                                 }
                             }
 
-                            Text(background.name)
+                            Text(theme.name)
                                 .font(.system(size: 9))
                                 .foregroundColor(.secondary)
                                 .lineLimit(1)
                         }
                         .frame(maxWidth: .infinity)
                         .contentShape(Rectangle())
-                        .onTapGesture { settings.backgroundColorIndex = index }
+                        .onTapGesture { settings.accentColorIndex = index }
                     }
                 }
             }
         }
     }
 
+    private var statusBarOrderView: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            ForEach(settings.statusBarItemOrder) { item in
+                HStack(spacing: 8) {
+                    Image(systemName: "line.3.horizontal")
+                        .foregroundColor(.secondary)
+                    Image(systemName: item.systemImage)
+                        .foregroundColor(settings.currentThemeColor)
+                        .frame(width: 18)
+                    Text(item.title)
+                    Spacer()
+                    Text(statusBarItemIsVisible(item) ? "已显示" : "已隐藏")
+                        .font(.system(size: 11))
+                        .foregroundColor(.secondary)
+                }
+                .font(.system(size: 13))
+                .foregroundColor(statusBarItemIsVisible(item) ? .primary : .secondary.opacity(0.55))
+                .padding(.horizontal, 10)
+                .padding(.vertical, 7)
+                .background(Color(NSColor.controlBackgroundColor))
+                .clipShape(RoundedRectangle(cornerRadius: 6))
+                .contentShape(Rectangle())
+                .onDrag {
+                    draggedStatusItem = item
+                    return NSItemProvider(object: item.id as NSString)
+                }
+                .onDrop(
+                    of: [UTType.text],
+                    delegate: StatusBarItemDropDelegate(
+                        targetItem: item,
+                        draggedItem: $draggedStatusItem,
+                        settings: settings
+                    )
+                )
+            }
+        }
+    }
+
+    private func statusBarItemIsVisible(_ item: StatusBarItemKind) -> Bool {
+        switch item {
+        case .icon:
+            return settings.showIcon
+        case .weekday:
+            return settings.showWeekdayInStatusBar
+        case .solar:
+            return settings.showSolarInStatusBar
+        case .lunar:
+            return settings.showLunarInStatusBar
+        case .time:
+            return true
+        }
+    }
+
     private var customColorPopoverContent: some View {
         VStack(spacing: 14) {
-            Text("自定义背景颜色")
+            Text("自定义主色调")
                 .font(.system(size: 13, weight: .medium))
 
             ColorPicker("颜色", selection: customColorBinding, supportsOpacity: false)
@@ -417,7 +453,7 @@ struct SettingsView: View {
                     a = 255
                 }
                 settings.backgroundCustomARGB = String(format: "%02X%02X%02X%02X", a, r, g, b)
-                settings.backgroundColorIndex = AppSettings.customBackgroundColorIndex
+                settings.accentColorIndex = AppSettings.customThemeColorIndex
             }
         )
     }
@@ -442,7 +478,7 @@ struct SettingsView: View {
                 } else {
                     settings.backgroundCustomARGB = String(format: "%02XFFFFFF", a)
                 }
-                settings.backgroundColorIndex = AppSettings.customBackgroundColorIndex
+                settings.accentColorIndex = AppSettings.customThemeColorIndex
             }
         )
     }
@@ -469,7 +505,7 @@ struct SettingsView: View {
                     .filter { $0.isNumber || ("A"..."F").contains(String($0)) }
                     .prefix(8)
                 settings.backgroundCustomARGB = String(normalized)
-                settings.backgroundColorIndex = AppSettings.customBackgroundColorIndex
+                settings.accentColorIndex = AppSettings.customThemeColorIndex
             }
         )
     }
@@ -754,6 +790,34 @@ private struct PreviewDayCell: View {
         if !day.isCurrentMonth { return .secondary.opacity(0.2) }
         if day.isFestival { return .red.opacity(0.75) }
         return .secondary.opacity(0.7)
+    }
+}
+
+private struct StatusBarItemDropDelegate: DropDelegate {
+    let targetItem: StatusBarItemKind
+    @Binding var draggedItem: StatusBarItemKind?
+    let settings: AppSettings
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedItem, draggedItem != targetItem else { return }
+
+        var order = settings.statusBarItemOrder
+        guard let fromIndex = order.firstIndex(of: draggedItem),
+              let toIndex = order.firstIndex(of: targetItem)
+        else {
+            return
+        }
+
+        withAnimation(.easeInOut(duration: 0.15)) {
+            let item = order.remove(at: fromIndex)
+            order.insert(item, at: toIndex)
+            settings.statusBarItemOrder = order
+        }
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedItem = nil
+        return true
     }
 }
 

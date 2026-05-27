@@ -48,50 +48,90 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let settings = AppSettings.shared
         let now = Date()
 
-        // Icon
-        if settings.showIcon {
-            button.image = NSImage(systemSymbolName: "calendar", accessibilityDescription: "日历")
-        } else {
-            button.image = nil
-        }
-
-        let title = " " + statusTitle(for: now, settings: settings)
-        button.attributedTitle = NSAttributedString(
-            string: title,
-            attributes: [
-                .font: statusTitleFont,
-                .foregroundColor: NSColor.labelColor,
-            ]
-        )
+        button.image = nil
+        button.attributedTitle = statusAttributedTitle(for: now, settings: settings)
         statusItem?.length = reservedStatusItemLength(for: now, settings: settings)
     }
 
-    private func statusTitle(for date: Date, settings: AppSettings) -> String {
-        var parts: [String] = []
+    private func statusAttributedTitle(for date: Date, settings: AppSettings) -> NSAttributedString {
+        let title = NSMutableAttributedString()
+        let parts = statusParts(for: date, settings: settings)
 
+        for (index, part) in parts.enumerated() {
+            if index > 0 {
+                title.append(NSAttributedString(string: " ", attributes: statusTextAttributes))
+            }
+
+            switch part {
+            case .icon:
+                let attachment = NSTextAttachment()
+                let image = NSImage(systemSymbolName: "calendar", accessibilityDescription: "日历")
+                image?.size = NSSize(width: 15, height: 15)
+                attachment.image = image
+                attachment.bounds = NSRect(x: 0, y: -2, width: 15, height: 15)
+                title.append(NSAttributedString(attachment: attachment))
+            case .text(let value):
+                title.append(NSAttributedString(string: value, attributes: statusTextAttributes))
+            }
+        }
+
+        return title
+    }
+
+    private var statusTextAttributes: [NSAttributedString.Key: Any] {
+        [
+            .font: statusTitleFont,
+            .foregroundColor: NSColor.labelColor,
+        ]
+    }
+
+    private enum StatusPart {
+        case icon
+        case text(String)
+    }
+
+    private func statusParts(for date: Date, settings: AppSettings) -> [StatusPart] {
+        settings.statusBarItemOrder.compactMap { item in
+            switch item {
+            case .icon:
+                return settings.showIcon ? .icon : nil
+            case .weekday:
+                guard settings.showWeekdayInStatusBar else { return nil }
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "zh_CN")
+                formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+                formatter.dateFormat = "EEE"
+                return .text(formatter.string(from: date))
+            case .solar:
+                guard settings.showSolarInStatusBar else { return nil }
+                let formatter = DateFormatter()
+                formatter.locale = Locale(identifier: "zh_CN")
+                formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+                formatter.dateFormat = "yyyy年M月d日"
+                return .text(formatter.string(from: date))
+            case .lunar:
+                guard settings.showLunarInStatusBar else { return nil }
+                return .text(LunarCalendar.monthDayText(for: date))
+            case .time:
+                return .text(statusTimeText(for: date, settings: settings))
+            }
+        }
+    }
+
+    private func statusTitle(for date: Date, settings: AppSettings) -> String {
+        statusParts(for: date, settings: settings).compactMap { part in
+            switch part {
+            case .icon: return settings.showIcon ? "□" : nil
+            case .text(let value): return value
+            }
+        }
+        .joined(separator: " ")
+    }
+
+    private func statusTimeText(for date: Date, settings: AppSettings) -> String {
         let timeFormatter = DateFormatter()
         timeFormatter.locale = Locale(identifier: "zh_CN")
         timeFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-
-        if settings.showWeekdayInStatusBar {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "zh_CN")
-            formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-            formatter.dateFormat = "EEE"
-            parts.append(formatter.string(from: date))
-        }
-
-        if settings.showSolarInStatusBar {
-            let formatter = DateFormatter()
-            formatter.locale = Locale(identifier: "zh_CN")
-            formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-            formatter.dateFormat = "yyyy年M月d日"
-            parts.append(formatter.string(from: date))
-        }
-
-        if settings.showLunarInStatusBar {
-            parts.append(LunarCalendar.monthDayText(for: date))
-        }
         
         if settings.use24HourFormat {
             timeFormatter.dateFormat = settings.showSeconds ? "HH:mm:ss" : "HH:mm"
@@ -102,13 +142,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 timeFormatter.dateFormat = settings.showSeconds ? "h:mm:ss" : "h:mm"
             }
         }
-        parts.append(timeFormatter.string(from: date))
-
-        return parts.joined(separator: " ")
+        return timeFormatter.string(from: date)
     }
 
     private func reservedStatusItemLength(for date: Date, settings: AppSettings) -> CGFloat {
-        let actualTitle = " " + statusTitle(for: date, settings: settings)
+        let actualTitle = statusTitle(for: date, settings: settings)
         var candidates = [actualTitle]
 
         if settings.use24HourFormat {
@@ -122,9 +160,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let titleWidth = candidates
             .map { ($0 as NSString).size(withAttributes: [.font: statusTitleFont]).width }
             .max() ?? 0
-        let iconWidth: CGFloat = settings.showIcon ? 22 : 0
-        let horizontalPadding: CGFloat = settings.showIcon ? 14 : 10
-        return ceil(titleWidth + iconWidth + horizontalPadding)
+        let horizontalPadding: CGFloat = 18
+        return ceil(titleWidth + horizontalPadding)
     }
 
     @objc private func togglePopover(_ sender: Any?) {

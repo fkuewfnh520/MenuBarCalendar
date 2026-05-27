@@ -34,6 +34,7 @@ struct CalendarView: View {
         }
         .frame(width: 360)
         .background(calendarBackground)
+        .environment(\.colorScheme, .light)
         .onChange(of: settings.weekStartsOn) { _ in vm.updateWeekStart(settings.weekStartsOn) }
     }
 
@@ -174,7 +175,7 @@ struct CalendarView: View {
             .buttonStyle(.plain)
             .help("退出")
 
-            Button(action: { SettingsWindowController.shared.showWindow() }) {
+            Button(action: { SettingsWindowController.shared.showWindow(anchorWindow: NSApp.keyWindow) }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
@@ -207,8 +208,9 @@ final class SettingsWindowController {
 
     private init() {}
 
-    func showWindow() {
+    func showWindow(anchorWindow: NSWindow? = nil) {
         if let existingWindow = window, existingWindow.isVisible {
+            position(existingWindow, near: anchorWindow)
             existingWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -218,7 +220,7 @@ final class SettingsWindowController {
         let hostingController = NSHostingController(rootView: settingsView)
 
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 380, height: 440),
+            contentRect: NSRect(x: 0, y: 0, width: 420, height: 460),
             styleMask: [.titled, .closable],
             backing: .buffered,
             defer: false
@@ -226,11 +228,63 @@ final class SettingsWindowController {
         window.contentViewController = hostingController
         window.title = "设置"
         window.isReleasedWhenClosed = false
-        window.center()
+        position(window, near: anchorWindow)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async { [weak self, weak window, weak anchorWindow] in
+            guard let window else { return }
+            self?.position(window, near: anchorWindow)
+        }
 
         self.window = window
+    }
+
+    private func position(_ window: NSWindow, near anchorWindow: NSWindow?) {
+        let fallbackPoint = NSEvent.mouseLocation
+        let anchorFrame = anchorWindow?.frame
+        let anchorPoint = anchorFrame.map { NSPoint(x: $0.midX, y: $0.midY) } ?? fallbackPoint
+        let screen = anchorWindow?.screen
+            ?? NSScreen.screens.first { $0.frame.contains(anchorPoint) }
+            ?? NSScreen.main
+        guard let visibleFrame = screen?.visibleFrame else {
+            window.center()
+            return
+        }
+
+        let margin: CGFloat = 10
+        let windowSize = window.frame.size
+        let preferredX = anchorPoint.x - windowSize.width / 2
+        let preferredY = (anchorFrame?.maxY ?? visibleFrame.maxY) - windowSize.height - 8
+        var proposedFrame = NSRect(origin: NSPoint(x: preferredX, y: preferredY), size: windowSize)
+        proposedFrame = clamp(proposedFrame, to: visibleFrame.insetBy(dx: margin, dy: margin))
+
+        window.setFrame(proposedFrame, display: true)
+    }
+
+    private func clamp(_ frame: NSRect, to bounds: NSRect) -> NSRect {
+        var frame = frame
+
+        if frame.width > bounds.width {
+            frame.size.width = bounds.width
+        }
+        if frame.height > bounds.height {
+            frame.size.height = bounds.height
+        }
+
+        if frame.maxX > bounds.maxX {
+            frame.origin.x = bounds.maxX - frame.width
+        }
+        if frame.minX < bounds.minX {
+            frame.origin.x = bounds.minX
+        }
+        if frame.maxY > bounds.maxY {
+            frame.origin.y = bounds.maxY - frame.height
+        }
+        if frame.minY < bounds.minY {
+            frame.origin.y = bounds.minY
+        }
+
+        return frame
     }
 }
 

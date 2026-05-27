@@ -3,6 +3,36 @@ import SwiftUI
 import Combine
 import ServiceManagement
 
+enum StatusBarItemKind: String, CaseIterable, Identifiable {
+    case icon
+    case weekday
+    case solar
+    case lunar
+    case time
+
+    var id: String { rawValue }
+
+    var title: String {
+        switch self {
+        case .icon: return "图标"
+        case .weekday: return "星期"
+        case .solar: return "阳历"
+        case .lunar: return "农历"
+        case .time: return "时间"
+        }
+    }
+
+    var systemImage: String {
+        switch self {
+        case .icon: return "calendar"
+        case .weekday: return "calendar.day.timeline.left"
+        case .solar: return "sun.max"
+        case .lunar: return "moon"
+        case .time: return "clock"
+        }
+    }
+}
+
 final class AppSettings: ObservableObject {
     static let shared = AppSettings()
 
@@ -28,7 +58,6 @@ final class AppSettings: ObservableObject {
     // MARK: - Style
 
     @AppStorage("accentColorIndex") var accentColorIndex: Int = 0
-    @AppStorage("backgroundColorIndex") var backgroundColorIndex: Int = 0
     @AppStorage("backgroundCustomARGB") var backgroundCustomARGB: String = "FFFFFFFF"
     @AppStorage("backgroundImagePath") var backgroundImagePath: String = ""
     @AppStorage("backgroundOpacity") var backgroundOpacity: Double = 0.18
@@ -36,48 +65,45 @@ final class AppSettings: ObservableObject {
     @AppStorage("backgroundOffsetY") var backgroundOffsetY: Double = 0.5
     @AppStorage("backgroundScale") var backgroundScale: Double = 0.5
 
-    static let themeColors: [(name: String, color: Color)] = [
-        ("默认蓝", Color.blue),
-        ("天空蓝", Color.cyan),
-        ("薄荷绿", Color.mint),
-        ("翡翠绿", Color.green),
-        ("柠檬黄", Color(red: 0.95, green: 0.8, blue: 0.0)),
-        ("落日橙", Color.orange),
-        ("珊瑚红", Color(red: 0.94, green: 0.36, blue: 0.36)),
-        ("玫瑰粉", Color.pink),
-        ("薰衣紫", Color.purple),
-        ("靛蓝", Color.indigo),
-        ("石墨灰", Color.gray),
-        ("棕褐色", Color.brown),
+    static let themeColors: [(name: String, argb: String)] = [
+        ("默认蓝", "FF2F80ED"),
+        ("天空蓝", "FF16A8E8"),
+        ("薄荷绿", "FF23B77E"),
+        ("翡翠绿", "FF2EAD4F"),
+        ("柠檬黄", "FFE5B800"),
+        ("落日橙", "FFF27A1A"),
+        ("珊瑚红", "FFE85656"),
+        ("玫瑰粉", "FFE84C8B"),
+        ("薰衣紫", "FF8B5CF6"),
+        ("靛蓝", "FF5865D9"),
+        ("石墨灰", "FF667085"),
+        ("奶油杏", "FFF2C6A0"),
+        ("蜜桃粉", "FFFFA8B5"),
+        ("樱花粉", "FFFFC7D9"),
+        ("雾紫", "FFCDB4DB"),
+        ("云朵蓝", "FFA7D8F0"),
+        ("冰川蓝", "FFB8E7F2"),
+        ("海盐青", "FFA8E6CF"),
+        ("鼠尾草", "FFB7D7B2"),
+        ("开心果", "FFD6EBA7"),
+        ("香草黄", "FFFFE1A8"),
+        ("奶茶棕", "FFD7B899"),
+        ("雾霾灰", "FFAEB8C2"),
+        ("自定义", "FFFFFFFF"),
     ]
 
-    static let backgroundColors: [(name: String, color: Color)] = [
-        ("默认", Color(NSColor.windowBackgroundColor)),
-        ("浅灰", Color(NSColor.controlBackgroundColor)),
-        ("天空蓝", Color.cyan.opacity(0.16)),
-        ("薄荷绿", Color.mint.opacity(0.16)),
-        ("暖黄色", Color.yellow.opacity(0.16)),
-        ("玫瑰粉", Color.pink.opacity(0.14)),
-        ("薰衣紫", Color.purple.opacity(0.14)),
-        ("石墨灰", Color.gray.opacity(0.18)),
-        ("淡橙", Color.orange.opacity(0.14)),
-        ("靛蓝", Color.indigo.opacity(0.14)),
-        ("自定义", Color.clear),
-    ]
-
-    static let customBackgroundColorIndex = backgroundColors.count - 1
+    static let customThemeColorIndex = themeColors.count - 1
 
     var currentThemeColor: Color {
         let index = max(0, min(accentColorIndex, Self.themeColors.count - 1))
-        return Self.themeColors[index].color
+        if index == Self.customThemeColorIndex {
+            return currentCustomBackgroundColor
+        }
+        return Self.color(fromARGB: Self.themeColors[index].argb) ?? Color.blue
     }
 
     var currentBackgroundColor: Color {
-        let index = max(0, min(backgroundColorIndex, Self.backgroundColors.count - 1))
-        if index == Self.customBackgroundColorIndex {
-            return currentCustomBackgroundColor
-        }
-        return Self.backgroundColors[index].color
+        Self.derivedBackgroundColor(from: currentThemeColor)
     }
 
     var currentCustomBackgroundColor: Color {
@@ -93,6 +119,29 @@ final class AppSettings: ObservableObject {
     @AppStorage("showLunarInStatusBar") var showLunarInStatusBar: Bool = false
     @AppStorage("showSolarInStatusBar") var showSolarInStatusBar: Bool = true
     @AppStorage("showWeekdayInStatusBar") var showWeekdayInStatusBar: Bool = false
+    @AppStorage("statusBarItemOrder") private var statusBarItemOrderRaw: String = ""
+
+    var statusBarItemOrder: [StatusBarItemKind] {
+        get {
+            let saved = statusBarItemOrderRaw
+                .split(separator: ",")
+                .compactMap { StatusBarItemKind(rawValue: String($0)) }
+            let missing = StatusBarItemKind.allCases.filter { !saved.contains($0) }
+            let ordered = saved + missing
+            return ordered.isEmpty ? Self.defaultStatusBarItemOrder : ordered
+        }
+        set {
+            let unique = newValue.reduce(into: [StatusBarItemKind]()) { result, item in
+                if !result.contains(item) {
+                    result.append(item)
+                }
+            }
+            let completed = unique + StatusBarItemKind.allCases.filter { !unique.contains($0) }
+            statusBarItemOrderRaw = completed.map(\.rawValue).joined(separator: ",")
+        }
+    }
+
+    static let defaultStatusBarItemOrder: [StatusBarItemKind] = [.icon, .weekday, .solar, .lunar, .time]
 
     // MARK: - Login Item
 
@@ -131,5 +180,14 @@ final class AppSettings: ObservableObject {
         let blue = CGFloat(value & 0xFF) / 255
 
         return Color(NSColor(calibratedRed: red, green: green, blue: blue, alpha: alpha))
+    }
+
+    static func derivedBackgroundColor(from color: Color) -> Color {
+        let nsColor = NSColor(color).usingColorSpace(.deviceRGB) ?? NSColor.white
+        let whiteMix: CGFloat = 0.88
+        let red = nsColor.redComponent * (1 - whiteMix) + whiteMix
+        let green = nsColor.greenComponent * (1 - whiteMix) + whiteMix
+        let blue = nsColor.blueComponent * (1 - whiteMix) + whiteMix
+        return Color(NSColor(calibratedRed: red, green: green, blue: blue, alpha: nsColor.alphaComponent))
     }
 }

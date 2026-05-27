@@ -22,6 +22,7 @@ final class BackgroundPreviewWindowController {
         dismissTimer?.invalidate()
 
         if let existingWindow = window, existingWindow.isVisible {
+            positionNextToSettingsWindow(existingWindow)
             existingWindow.alphaValue = 1
             scheduleDismiss()
             return
@@ -37,6 +38,10 @@ final class BackgroundPreviewWindowController {
             defer: false
         )
         previewWindow.contentViewController = hostingController
+        hostingController.view.frame = NSRect(x: 0, y: 0, width: 360, height: 410)
+        hostingController.view.layoutSubtreeIfNeeded()
+        previewWindow.contentView?.layoutSubtreeIfNeeded()
+        previewWindow.setContentSize(NSSize(width: 360, height: 410))
         previewWindow.title = "背景预览"
         previewWindow.isReleasedWhenClosed = false
         previewWindow.level = .floating
@@ -73,9 +78,11 @@ final class BackgroundPreviewWindowController {
                 context.duration = 0.3
                 window.animator().alphaValue = 0
             }, completionHandler: { [weak self] in
-                window.orderOut(nil)
-                window.alphaValue = 1
-                self?.window = nil
+                Task { @MainActor in
+                    window.orderOut(nil)
+                    window.alphaValue = 1
+                    self?.window = nil
+                }
             })
         } else {
             window.orderOut(nil)
@@ -86,21 +93,79 @@ final class BackgroundPreviewWindowController {
     private func positionNextToSettingsWindow(_ previewWindow: NSWindow) {
         if let settingsWindow = NSApp.windows.first(where: { $0.title == "设置" && $0.isVisible }) {
             let settingsFrame = settingsWindow.frame
+            let spacing: CGFloat = 12
+            let margin: CGFloat = 10
             let previewSize = previewWindow.frame.size
-            let x = settingsFrame.maxX + 12
-            let y = settingsFrame.midY - previewSize.height / 2
 
             if let screen = settingsWindow.screen ?? NSScreen.main {
-                let screenFrame = screen.visibleFrame
-                let adjustedX = min(x, screenFrame.maxX - previewSize.width)
-                let adjustedY = max(min(y, screenFrame.maxY - previewSize.height), screenFrame.minY)
-                previewWindow.setFrameOrigin(NSPoint(x: adjustedX, y: adjustedY))
+                let bounds = screen.visibleFrame.insetBy(dx: margin, dy: margin)
+                let rightX = settingsFrame.maxX + spacing
+                let leftX = settingsFrame.minX - previewSize.width - spacing
+                let fitsRight = rightX + previewSize.width <= bounds.maxX
+                let fitsLeft = leftX >= bounds.minX
+                let availableRight = max(0, bounds.maxX - rightX)
+                let availableLeft = max(0, settingsFrame.minX - spacing - bounds.minX)
+
+                let preferredSide: PreviewSide
+                if fitsRight {
+                    preferredSide = .right
+                } else if fitsLeft {
+                    preferredSide = .left
+                } else {
+                    preferredSide = availableLeft >= availableRight ? .left : .right
+                }
+
+                let availableWidth = preferredSide == .right ? availableRight : availableLeft
+                let width = min(previewSize.width, availableWidth)
+                let size = NSSize(width: width, height: previewSize.height)
+                let preferredX = preferredSide == .right
+                    ? rightX
+                    : settingsFrame.minX - size.width - spacing
+                let preferredY = settingsFrame.midY - previewSize.height / 2
+                let frame = clamp(
+                    NSRect(origin: NSPoint(x: preferredX, y: preferredY), size: size),
+                    to: bounds
+                )
+                previewWindow.setFrame(frame, display: true)
             } else {
-                previewWindow.setFrameOrigin(NSPoint(x: x, y: y))
+                previewWindow.setFrameOrigin(NSPoint(
+                    x: settingsFrame.maxX + spacing,
+                    y: settingsFrame.midY - previewSize.height / 2
+                ))
             }
         } else {
             previewWindow.center()
         }
+    }
+
+    private enum PreviewSide {
+        case left
+        case right
+    }
+
+    private func clamp(_ frame: NSRect, to bounds: NSRect) -> NSRect {
+        var frame = frame
+
+        if frame.width > bounds.width {
+            frame.size.width = bounds.width
+        }
+        if frame.height > bounds.height {
+            frame.size.height = bounds.height
+        }
+        if frame.maxX > bounds.maxX {
+            frame.origin.x = bounds.maxX - frame.width
+        }
+        if frame.minX < bounds.minX {
+            frame.origin.x = bounds.minX
+        }
+        if frame.maxY > bounds.maxY {
+            frame.origin.y = bounds.maxY - frame.height
+        }
+        if frame.minY < bounds.minY {
+            frame.origin.y = bounds.minY
+        }
+
+        return frame
     }
 }
 
