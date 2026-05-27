@@ -1,3 +1,4 @@
+import AppKit
 import SwiftUI
 
 // MARK: - CalendarView
@@ -32,8 +33,29 @@ struct CalendarView: View {
                 .padding(.vertical, 8)
         }
         .frame(width: 360)
-        .background(Color(NSColor.windowBackgroundColor))
+        .background(calendarBackground)
         .onChange(of: settings.weekStartsOn) { _ in vm.updateWeekStart(settings.weekStartsOn) }
+    }
+
+    private var calendarBackground: some View {
+        ZStack {
+            settings.currentBackgroundColor
+
+            if let image = BackgroundImageStore.image(for: settings) {
+                PositionedBackgroundImage(
+                    image: image,
+                    offsetX: settings.backgroundOffsetX,
+                    offsetY: settings.backgroundOffsetY,
+                    scale: settings.backgroundScale
+                )
+                .opacity(settings.backgroundOpacity)
+                .allowsHitTesting(false)
+            }
+
+            settings.currentBackgroundColor
+                .opacity(0.72)
+                .allowsHitTesting(false)
+        }
     }
 
     // MARK: - Header
@@ -142,6 +164,16 @@ struct CalendarView: View {
 
             Spacer()
 
+            Button(action: confirmQuit) {
+                Image(systemName: "power")
+                    .font(.system(size: 16))
+                    .foregroundColor(.secondary)
+                    .frame(width: 28, height: 28)
+                    .contentShape(Rectangle())
+            }
+            .buttonStyle(.plain)
+            .help("退出")
+
             Button(action: { SettingsWindowController.shared.showWindow() }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 16))
@@ -150,7 +182,20 @@ struct CalendarView: View {
                     .contentShape(Rectangle())
             }
             .buttonStyle(.plain)
+            .help("设置")
         }
+    }
+
+    private func confirmQuit() {
+        let alert = NSAlert()
+        alert.messageText = "退出日历？"
+        alert.informativeText = "确认后将关闭菜单栏日历。"
+        alert.alertStyle = .warning
+        alert.addButton(withTitle: "退出")
+        alert.addButton(withTitle: "取消")
+
+        guard alert.runModal() == .alertFirstButtonReturn else { return }
+        NSApp.terminate(nil)
     }
 }
 
@@ -229,9 +274,10 @@ struct DayCellView: View {
                     .foregroundColor(dayTextColor)
 
                 Text(day.lunarText)
-                    .font(.system(size: 9))
+                    .font(.system(size: day.festivalText == nil ? 9 : 8.5, weight: day.festivalText == nil ? .regular : .medium))
                     .foregroundColor(lunarTextColor)
                     .lineLimit(1)
+                    .minimumScaleFactor(0.65)
             }
             .frame(maxWidth: .infinity, maxHeight: .infinity)
 
@@ -270,6 +316,7 @@ struct DayCellView: View {
 
     private var lunarTextColor: Color {
         if !day.isCurrentMonth { return .secondary.opacity(0.2) }
+        if day.festivalText != nil { return .red.opacity(0.75) }
         return .secondary.opacity(0.7)
     }
 }

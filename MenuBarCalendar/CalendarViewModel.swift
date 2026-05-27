@@ -14,10 +14,12 @@ struct DayItem: Identifiable {
     let holidayInfo: HolidayInfo?
     let isCompensatoryWorkday: Bool
     let lunarText: String
+    let festivalText: String?
 }
 
 // MARK: - CalendarViewModel
 
+@MainActor
 final class CalendarViewModel: ObservableObject {
     @Published var days: [DayItem] = []
     @Published var monthTitle: String = ""
@@ -41,6 +43,7 @@ final class CalendarViewModel: ObservableObject {
     private let today: Date
     private var timer: Timer?
     private var weekStartsOnMonday: Bool
+    private var cancellables = Set<AnyCancellable>()
 
     init() {
         var cal = Calendar(identifier: .gregorian)
@@ -60,9 +63,20 @@ final class CalendarViewModel: ObservableObject {
         self.yearRange = Array((currentYear - 50)...(currentYear + 50))
 
         updateWeekdaySymbols()
+        bindHolidayUpdates()
+        HolidayStore.shared.ensureYearAvailable(currentYear)
         buildMonth()
         updateBottomBar()
         startTimer()
+    }
+
+    private func bindHolidayUpdates() {
+        HolidayStore.shared.objectWillChange
+            .receive(on: RunLoop.main)
+            .sink { [weak self] _ in
+                self?.buildMonth()
+            }
+            .store(in: &cancellables)
     }
 
     deinit {
@@ -73,7 +87,9 @@ final class CalendarViewModel: ObservableObject {
 
     private func startTimer() {
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.updateBottomBar()
+            Task { @MainActor in
+                self?.updateBottomBar()
+            }
         }
     }
 
@@ -110,7 +126,7 @@ final class CalendarViewModel: ObservableObject {
         dateFormatter.dateFormat = "yyyy年M月d日"
         currentDateString = dateFormatter.string(from: displayDate)
 
-        currentLunarString = LunarCalendar.monthDayText(for: displayDate)
+        currentLunarString = LunarCalendar.monthDayAndFestivalText(for: displayDate)
     }
 
     // MARK: - Week Start
@@ -136,6 +152,7 @@ final class CalendarViewModel: ObservableObject {
         guard let next = calendar.date(byAdding: .month, value: 1, to: displayedMonth) else { return }
         displayedMonth = next
         displayedYear = calendar.component(.year, from: displayedMonth)
+        HolidayStore.shared.ensureYearAvailable(displayedYear)
         buildMonth()
     }
 
@@ -143,6 +160,7 @@ final class CalendarViewModel: ObservableObject {
         guard let prev = calendar.date(byAdding: .month, value: -1, to: displayedMonth) else { return }
         displayedMonth = prev
         displayedYear = calendar.component(.year, from: displayedMonth)
+        HolidayStore.shared.ensureYearAvailable(displayedYear)
         buildMonth()
     }
 
@@ -155,6 +173,7 @@ final class CalendarViewModel: ObservableObject {
         if let newDate = calendar.date(from: comps) {
             displayedMonth = newDate
             displayedYear = year
+            HolidayStore.shared.ensureYearAvailable(year)
             buildMonth()
         }
     }
@@ -162,6 +181,7 @@ final class CalendarViewModel: ObservableObject {
     func goToToday() {
         displayedMonth = today
         displayedYear = calendar.component(.year, from: today)
+        HolidayStore.shared.ensureYearAvailable(displayedYear)
         selectedDate = nil
         selectedHolidayInfo = nil
         bottomBarDate = nil
@@ -225,7 +245,8 @@ final class CalendarViewModel: ObservableObject {
                 isWeekend: isWeekend,
                 holidayInfo: ChineseHolidays.holidayInfo(for: date),
                 isCompensatoryWorkday: ChineseHolidays.isWorkday(date),
-                lunarText: LunarCalendar.shortText(for: date)
+                lunarText: LunarCalendar.dayCellText(for: date),
+                festivalText: LunarCalendar.festivalText(for: date)
             ))
         }
 

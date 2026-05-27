@@ -7,6 +7,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var popover: NSPopover?
     private var cancellables = Set<AnyCancellable>()
     private var timer: Timer?
+    private let statusTitleFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         let contentView = CalendarView()
@@ -18,6 +19,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         self.popover = popover
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+        statusItem?.autosaveName = "MenuBarCalendarStatusItem"
         if let button = statusItem?.button {
             button.action = #selector(togglePopover(_:))
             button.target = self
@@ -53,13 +55,44 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             button.image = nil
         }
 
-        // Build title parts
+        let title = " " + statusTitle(for: now, settings: settings)
+        button.attributedTitle = NSAttributedString(
+            string: title,
+            attributes: [
+                .font: statusTitleFont,
+                .foregroundColor: NSColor.labelColor,
+            ]
+        )
+        statusItem?.length = reservedStatusItemLength(for: now, settings: settings)
+    }
+
+    private func statusTitle(for date: Date, settings: AppSettings) -> String {
         var parts: [String] = []
 
-        // Time
         let timeFormatter = DateFormatter()
         timeFormatter.locale = Locale(identifier: "zh_CN")
         timeFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+
+        if settings.showWeekdayInStatusBar {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+            formatter.dateFormat = "EEE"
+            parts.append(formatter.string(from: date))
+        }
+
+        if settings.showSolarInStatusBar {
+            let formatter = DateFormatter()
+            formatter.locale = Locale(identifier: "zh_CN")
+            formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+            formatter.dateFormat = "yyyy年M月d日"
+            parts.append(formatter.string(from: date))
+        }
+
+        if settings.showLunarInStatusBar {
+            parts.append(LunarCalendar.monthDayText(for: date))
+        }
+        
         if settings.use24HourFormat {
             timeFormatter.dateFormat = settings.showSeconds ? "HH:mm:ss" : "HH:mm"
         } else {
@@ -69,32 +102,29 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 timeFormatter.dateFormat = settings.showSeconds ? "h:mm:ss" : "h:mm"
             }
         }
-        parts.append(timeFormatter.string(from: now))
+        parts.append(timeFormatter.string(from: date))
 
-        // Weekday
-        if settings.showWeekdayInStatusBar {
-            let wf = DateFormatter()
-            wf.locale = Locale(identifier: "zh_CN")
-            wf.timeZone = TimeZone(identifier: "Asia/Shanghai")
-            wf.dateFormat = "EEE"
-            parts.append(wf.string(from: now))
+        return parts.joined(separator: " ")
+    }
+
+    private func reservedStatusItemLength(for date: Date, settings: AppSettings) -> CGFloat {
+        let actualTitle = " " + statusTitle(for: date, settings: settings)
+        var candidates = [actualTitle]
+
+        if settings.use24HourFormat {
+            candidates.append(settings.showSeconds ? " 00:00:00" : " 00:00")
+        } else if settings.showAMPM {
+            candidates.append(settings.showSeconds ? " 下午 00:00:00" : " 下午 00:00")
+        } else {
+            candidates.append(settings.showSeconds ? " 00:00:00" : " 00:00")
         }
 
-        // Solar date
-        if settings.showSolarInStatusBar {
-            let df = DateFormatter()
-            df.locale = Locale(identifier: "zh_CN")
-            df.timeZone = TimeZone(identifier: "Asia/Shanghai")
-            df.dateFormat = "yyyy年M月d日"
-            parts.append(df.string(from: now))
-        }
-
-        // Lunar date
-        if settings.showLunarInStatusBar {
-            parts.append(LunarCalendar.monthDayText(for: now))
-        }
-
-        button.title = " " + parts.joined(separator: " ")
+        let titleWidth = candidates
+            .map { ($0 as NSString).size(withAttributes: [.font: statusTitleFont]).width }
+            .max() ?? 0
+        let iconWidth: CGFloat = settings.showIcon ? 22 : 0
+        let horizontalPadding: CGFloat = settings.showIcon ? 14 : 10
+        return ceil(titleWidth + iconWidth + horizontalPadding)
     }
 
     @objc private func togglePopover(_ sender: Any?) {
