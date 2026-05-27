@@ -33,6 +33,9 @@ final class CalendarViewModel: ObservableObject {
     @Published var currentDateString: String = ""
     @Published var currentLunarString: String = ""
 
+    /// The date shown in the bottom bar; nil means "now" (live clock).
+    private var bottomBarDate: Date?
+
     private var displayedMonth: Date
     private var calendar: Calendar
     private let today: Date
@@ -76,6 +79,7 @@ final class CalendarViewModel: ObservableObject {
 
     private func updateBottomBar() {
         let now = Date()
+        let displayDate = bottomBarDate ?? now
 
         let settings = AppSettings.shared
 
@@ -98,15 +102,15 @@ final class CalendarViewModel: ObservableObject {
         weekdayFormatter.locale = Locale(identifier: "zh_CN")
         weekdayFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
         weekdayFormatter.dateFormat = "EEEE"
-        currentWeekdayString = weekdayFormatter.string(from: now)
+        currentWeekdayString = weekdayFormatter.string(from: displayDate)
 
         let dateFormatter = DateFormatter()
         dateFormatter.locale = Locale(identifier: "zh_CN")
         dateFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
         dateFormatter.dateFormat = "yyyy年M月d日"
-        currentDateString = dateFormatter.string(from: now)
+        currentDateString = dateFormatter.string(from: displayDate)
 
-        currentLunarString = LunarCalendar.monthDayText(for: now)
+        currentLunarString = LunarCalendar.monthDayText(for: displayDate)
     }
 
     // MARK: - Week Start
@@ -160,12 +164,16 @@ final class CalendarViewModel: ObservableObject {
         displayedYear = calendar.component(.year, from: today)
         selectedDate = nil
         selectedHolidayInfo = nil
+        bottomBarDate = nil
         buildMonth()
+        updateBottomBar()
     }
 
     func select(_ day: DayItem) {
         selectedDate = day.date
         selectedHolidayInfo = day.holidayInfo
+        bottomBarDate = day.date
+        updateBottomBar()
     }
 
     // MARK: - Build Month Grid
