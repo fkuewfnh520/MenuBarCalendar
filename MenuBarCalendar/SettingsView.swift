@@ -2,27 +2,10 @@ import SwiftUI
 
 struct SettingsView: View {
     @ObservedObject var settings = AppSettings.shared
-    @Environment(\.dismiss) private var dismiss
     @State private var selectedTab = 0
 
     var body: some View {
         VStack(spacing: 0) {
-            // Title bar with close button
-            HStack {
-                Text("设置")
-                    .font(.system(size: 14, weight: .semibold))
-                Spacer()
-                Button(action: { dismiss() }) {
-                    Image(systemName: "xmark.circle.fill")
-                        .font(.system(size: 18))
-                        .foregroundColor(.secondary.opacity(0.6))
-                }
-                .buttonStyle(.plain)
-            }
-            .padding(.horizontal, 12)
-            .padding(.top, 10)
-            .padding(.bottom, 4)
-
             // Tab bar
             HStack(spacing: 0) {
                 tabButton("通用", icon: "gearshape", tag: 0)
@@ -45,7 +28,7 @@ struct SettingsView: View {
             }
             .padding(16)
         }
-        .frame(width: 340, height: 400)
+        .frame(width: 360, height: 380)
         .background(Color(NSColor.windowBackgroundColor))
     }
 

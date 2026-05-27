@@ -85,7 +85,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let df = DateFormatter()
             df.locale = Locale(identifier: "zh_CN")
             df.timeZone = TimeZone(identifier: "Asia/Shanghai")
-            df.dateFormat = "M月d日"
+            df.dateFormat = "yyyy年M月d日"
             parts.append(df.string(from: now))
         }
 

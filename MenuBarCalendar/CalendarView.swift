@@ -5,7 +5,6 @@ import SwiftUI
 struct CalendarView: View {
     @StateObject private var vm = CalendarViewModel()
     @ObservedObject private var settings = AppSettings.shared
-    @State private var showSettings = false
 
     private var columns: [GridItem] {
         Array(repeating: GridItem(.flexible(), spacing: 1), count: 7)
@@ -34,9 +33,6 @@ struct CalendarView: View {
         }
         .frame(width: 360)
         .background(Color(NSColor.windowBackgroundColor))
-        .sheet(isPresented: $showSettings) {
-            SettingsView()
-        }
         .onChange(of: settings.weekStartsOn) { _ in vm.updateWeekStart(settings.weekStartsOn) }
     }
 
@@ -53,7 +49,7 @@ struct CalendarView: View {
                     Text("\(year)年").tag(year)
                 }
             }
-            .frame(width: 80)
+            .frame(width: 100)
             .labelsHidden()
 
             Spacer()
@@ -146,7 +142,7 @@ struct CalendarView: View {
 
             Spacer()
 
-            Button(action: { showSettings.toggle() }) {
+            Button(action: { SettingsWindowController.shared.showWindow() }) {
                 Image(systemName: "gearshape")
                     .font(.system(size: 16))
                     .foregroundColor(.secondary)
@@ -155,6 +151,41 @@ struct CalendarView: View {
             }
             .buttonStyle(.plain)
         }
+    }
+}
+
+// MARK: - SettingsWindowController
+
+final class SettingsWindowController {
+    static let shared = SettingsWindowController()
+    private var window: NSWindow?
+
+    private init() {}
+
+    func showWindow() {
+        if let existingWindow = window, existingWindow.isVisible {
+            existingWindow.makeKeyAndOrderFront(nil)
+            NSApp.activate(ignoringOtherApps: true)
+            return
+        }
+
+        let settingsView = SettingsView()
+        let hostingController = NSHostingController(rootView: settingsView)
+
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 380, height: 440),
+            styleMask: [.titled, .closable],
+            backing: .buffered,
+            defer: false
+        )
+        window.contentViewController = hostingController
+        window.title = "设置"
+        window.isReleasedWhenClosed = false
+        window.center()
+        window.makeKeyAndOrderFront(nil)
+        NSApp.activate(ignoringOtherApps: true)
+
+        self.window = window
     }
 }
 
