@@ -71,6 +71,21 @@ https://www.shuyz.com/githubfiles/china-holiday-calender/master/holidayCal.ics
 
 > **提示**：应用设置了 `LSUIElement = YES`，不会在 Dock 中显示图标，仅在菜单栏运行；如需关闭应用，可点击日历面板底部左侧的退出图标，并在确认弹窗中选择「退出」。
 
+### 发布通用版
+
+项目已配置为标准 macOS 通用架构，Release 构建会同时包含 Apple Silicon (`arm64`) 和 Intel (`x86_64`)。
+
+发布给其他 Mac 使用时，建议在 Xcode 中使用 **Any Mac** / **Generic Mac** 或 **Archive** 方式构建；如果直接从当前机器的运行产物中取 `.app`，可能只包含当前机器的架构。
+
+也可以用命令行构建并验证：
+
+```bash
+xcodebuild -scheme MenuBarCalendar -configuration Release -destination generic/platform=macOS build
+lipo -info "path/to/万年历.app/Contents/MacOS/万年历"
+```
+
+验证结果应同时包含 `x86_64` 和 `arm64`。
+
 ## 项目结构
 
 ```
