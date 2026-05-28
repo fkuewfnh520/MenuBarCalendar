@@ -175,4 +175,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
     }
+
+    func keepCalendarOpenForSettingsPreview() {
+        guard let button = statusItem?.button, let popover else { return }
+        popover.behavior = .applicationDefined
+        if !popover.isShown {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+    }
+
+    func closeSettingsPreviewCalendar() {
+        guard let popover else { return }
+        popover.behavior = .transient
+        if popover.isShown {
+            popover.performClose(nil)
+        }
+    }
 }

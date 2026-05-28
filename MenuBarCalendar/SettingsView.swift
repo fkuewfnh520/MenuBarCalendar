@@ -39,8 +39,6 @@ struct SettingsView: View {
         .frame(width: 420, height: 460)
         .background(Color(NSColor.windowBackgroundColor))
         .background(WindowReader(window: $settingsWindow))
-        .onChange(of: settings.accentColorIndex) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundCustomARGB) { _ in BackgroundPreviewWindowController.shared.showPreview() }
     }
 
     // MARK: - Tab Button
@@ -224,17 +222,6 @@ struct SettingsView: View {
                 }
             }
         }
-        .onAppear {
-            BackgroundPreviewWindowController.shared.startObserving()
-        }
-        .onDisappear {
-            BackgroundPreviewWindowController.shared.stopObserving()
-        }
-        .onChange(of: settings.backgroundImagePath) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundOpacity) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundOffsetX) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundOffsetY) { _ in BackgroundPreviewWindowController.shared.showPreview() }
-        .onChange(of: settings.backgroundScale) { _ in BackgroundPreviewWindowController.shared.showPreview() }
     }
 
     // MARK: - Helper
