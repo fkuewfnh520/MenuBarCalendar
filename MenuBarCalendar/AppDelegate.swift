@@ -10,6 +10,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private var localEventMonitor: Any?
     private var globalEventMonitor: Any?
     private var isSettingsPreviewActive = false
+    private var hideAnimationToken = 0
     private let calendarPanelSize = NSSize(width: 360, height: 480)
     private let statusTitleFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
@@ -185,9 +186,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func keepCalendarOpenForSettingsPreview() {
         isSettingsPreviewActive = true
         showCalendarPanel()
-        DispatchQueue.main.async { [weak self] in
-            self?.showCalendarPanel()
-        }
     }
 
     func closeSettingsPreviewCalendar() {
@@ -205,6 +203,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         panel.contentViewController = NSHostingController(rootView: CalendarView())
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        panel.alphaValue = 0
         panel.isOpaque = false
         panel.isReleasedWhenClosed = false
         panel.level = .floating
@@ -219,27 +218,58 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
-            self?.hideCalendarPanelIfNeeded(at: NSEvent.mouseLocation)
+            let mouseLocation = NSEvent.mouseLocation
+            DispatchQueue.main.async {
+                self?.hideCalendarPanelIfNeeded(at: mouseLocation)
+            }
         }
     }
 
     private func showCalendarPanel() {
         guard let panel = calendarPanel else { return }
+        hideAnimationToken += 1
         positionCalendarPanel(panel)
+
+        guard !panel.isVisible else {
+            panel.alphaValue = 1
+            return
+        }
+
+        panel.alphaValue = 0
         panel.orderFrontRegardless()
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.14
+            context.timingFunction = CAMediaTimingFunction(name: .easeOut)
+            panel.animator().alphaValue = 1
+        }
     }
 
     private func hideCalendarPanel() {
-        calendarPanel?.orderOut(nil)
+        guard let panel = calendarPanel, panel.isVisible else { return }
+
+        hideAnimationToken += 1
+        let token = hideAnimationToken
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = 0.12
+            context.timingFunction = CAMediaTimingFunction(name: .easeIn)
+            panel.animator().alphaValue = 0
+        } completionHandler: { [weak self, weak panel] in
+            guard let self, token == self.hideAnimationToken else { return }
+            panel?.orderOut(nil)
+        }
     }
 
     private func hideCalendarPanelIfNeeded(forWindowEvent event: NSEvent) {
-        guard !isSettingsPreviewActive,
+        guard shouldAutoHideCalendar,
               let panel = calendarPanel,
               panel.isVisible
         else { return }
 
         if event.window === panel {
+            return
+        }
+
+        if SettingsWindowController.shared.containsWindow(event.window) {
             return
         }
 
@@ -253,7 +283,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func hideCalendarPanelIfNeeded(at screenPoint: NSPoint) {
-        guard !isSettingsPreviewActive,
+        guard shouldAutoHideCalendar,
               let panel = calendarPanel,
               panel.isVisible
         else { return }
@@ -263,6 +293,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
 
         hideCalendarPanel()
+    }
+
+    private var shouldAutoHideCalendar: Bool {
+        !isSettingsPreviewActive && !SettingsWindowController.shared.isWindowVisible
     }
 
     private func positionCalendarPanel(_ panel: NSPanel) {

@@ -208,6 +208,14 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
 
     private override init() {}
 
+    var isWindowVisible: Bool {
+        window?.isVisible == true
+    }
+
+    func containsWindow(_ candidate: NSWindow?) -> Bool {
+        candidate === window
+    }
+
     func showWindow(anchorWindow: NSWindow? = nil) {
         (NSApp.delegate as? AppDelegate)?.keepCalendarOpenForSettingsPreview()
 
