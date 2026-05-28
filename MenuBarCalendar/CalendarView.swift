@@ -234,6 +234,9 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         center(window, on: anchorWindow?.screen)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
+        DispatchQueue.main.async {
+            (NSApp.delegate as? AppDelegate)?.keepCalendarOpenForSettingsPreview()
+        }
 
         self.window = window
     }

@@ -167,24 +167,23 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func togglePopover(_ sender: Any?) {
-        guard let button = statusItem?.button else { return }
         if let popover = popover {
             if popover.isShown {
                 guard !isSettingsPreviewActive else { return }
                 popover.performClose(sender)
             } else {
-                popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
-                popover.contentViewController?.view.window?.makeKey()
+                showCalendarPopover()
             }
         }
     }
 
     func keepCalendarOpenForSettingsPreview() {
-        guard let button = statusItem?.button, let popover else { return }
+        guard let popover else { return }
         isSettingsPreviewActive = true
         popover.behavior = .applicationDefined
-        if !popover.isShown {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        showCalendarPopover()
+        DispatchQueue.main.async { [weak self] in
+            self?.showCalendarPopover()
         }
     }
 
@@ -199,5 +198,13 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func popoverShouldClose(_ popover: NSPopover) -> Bool {
         !isSettingsPreviewActive
+    }
+
+    private func showCalendarPopover() {
+        guard let button = statusItem?.button, let popover else { return }
+        if !popover.isShown {
+            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+        }
+        popover.contentViewController?.view.window?.makeKey()
     }
 }
