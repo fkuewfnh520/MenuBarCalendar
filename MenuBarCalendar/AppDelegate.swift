@@ -2,23 +2,20 @@ import Cocoa
 import SwiftUI
 import Combine
 
-class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusItem: NSStatusItem?
-    private var popover: NSPopover?
+    private var calendarPanel: NSPanel?
     private var cancellables = Set<AnyCancellable>()
     private var timer: Timer?
+    private var localEventMonitor: Any?
+    private var globalEventMonitor: Any?
     private var isSettingsPreviewActive = false
+    private let calendarPanelSize = NSSize(width: 360, height: 480)
     private let statusTitleFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        let contentView = CalendarView()
-
-        let popover = NSPopover()
-        popover.contentSize = NSSize(width: 360, height: 480)
-        popover.behavior = .transient
-        popover.delegate = self
-        popover.contentViewController = NSHostingController(rootView: contentView)
-        self.popover = popover
+        setupCalendarPanel()
+        setupOutsideClickMonitors()
 
         statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
         statusItem?.autosaveName = "MenuBarCalendarStatusItem"
@@ -43,6 +40,15 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
                 }
             }
             .store(in: &cancellables)
+    }
+
+    func applicationWillTerminate(_ notification: Notification) {
+        if let localEventMonitor {
+            NSEvent.removeMonitor(localEventMonitor)
+        }
+        if let globalEventMonitor {
+            NSEvent.removeMonitor(globalEventMonitor)
+        }
     }
 
     private func updateStatusBarDisplay() {
@@ -167,44 +173,124 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     }
 
     @objc private func togglePopover(_ sender: Any?) {
-        if let popover = popover {
-            if popover.isShown {
-                guard !isSettingsPreviewActive else { return }
-                popover.performClose(sender)
-            } else {
-                showCalendarPopover()
-            }
+        guard let calendarPanel else { return }
+        if calendarPanel.isVisible {
+            guard !isSettingsPreviewActive else { return }
+            hideCalendarPanel()
+        } else {
+            showCalendarPanel()
         }
     }
 
     func keepCalendarOpenForSettingsPreview() {
-        guard let popover else { return }
         isSettingsPreviewActive = true
-        popover.behavior = .applicationDefined
-        showCalendarPopover()
+        showCalendarPanel()
         DispatchQueue.main.async { [weak self] in
-            self?.showCalendarPopover()
+            self?.showCalendarPanel()
         }
     }
 
     func closeSettingsPreviewCalendar() {
-        guard let popover else { return }
         isSettingsPreviewActive = false
-        popover.behavior = .transient
-        if popover.isShown {
-            popover.performClose(nil)
+        hideCalendarPanel()
+    }
+
+    private func setupCalendarPanel() {
+        let panel = NSPanel(
+            contentRect: NSRect(origin: .zero, size: calendarPanelSize),
+            styleMask: [.borderless, .nonactivatingPanel],
+            backing: .buffered,
+            defer: false
+        )
+        panel.contentViewController = NSHostingController(rootView: CalendarView())
+        panel.backgroundColor = .clear
+        panel.hasShadow = true
+        panel.isOpaque = false
+        panel.isReleasedWhenClosed = false
+        panel.level = .floating
+        panel.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        calendarPanel = panel
+    }
+
+    private func setupOutsideClickMonitors() {
+        localEventMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            self?.hideCalendarPanelIfNeeded(forWindowEvent: event)
+            return event
+        }
+
+        globalEventMonitor = NSEvent.addGlobalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] _ in
+            self?.hideCalendarPanelIfNeeded(at: NSEvent.mouseLocation)
         }
     }
 
-    func popoverShouldClose(_ popover: NSPopover) -> Bool {
-        !isSettingsPreviewActive
+    private func showCalendarPanel() {
+        guard let panel = calendarPanel else { return }
+        positionCalendarPanel(panel)
+        panel.orderFrontRegardless()
     }
 
-    private func showCalendarPopover() {
-        guard let button = statusItem?.button, let popover else { return }
-        if !popover.isShown {
-            popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
+    private func hideCalendarPanel() {
+        calendarPanel?.orderOut(nil)
+    }
+
+    private func hideCalendarPanelIfNeeded(forWindowEvent event: NSEvent) {
+        guard !isSettingsPreviewActive,
+              let panel = calendarPanel,
+              panel.isVisible
+        else { return }
+
+        if event.window === panel {
+            return
         }
-        popover.contentViewController?.view.window?.makeKey()
+
+        if let statusWindow = statusItem?.button?.window,
+           event.window === statusWindow,
+           isPointInStatusButton(event.locationInWindow) {
+            return
+        }
+
+        hideCalendarPanel()
+    }
+
+    private func hideCalendarPanelIfNeeded(at screenPoint: NSPoint) {
+        guard !isSettingsPreviewActive,
+              let panel = calendarPanel,
+              panel.isVisible
+        else { return }
+
+        if panel.frame.contains(screenPoint) || statusButtonFrameInScreen()?.contains(screenPoint) == true {
+            return
+        }
+
+        hideCalendarPanel()
+    }
+
+    private func positionCalendarPanel(_ panel: NSPanel) {
+        let statusFrame = statusButtonFrameInScreen()
+        let screen = statusFrame.flatMap { frame in
+            NSScreen.screens.first { $0.frame.contains(NSPoint(x: frame.midX, y: frame.midY)) }
+        } ?? NSScreen.main
+        guard let visibleFrame = screen?.visibleFrame else { return }
+
+        let anchor = statusFrame ?? NSRect(origin: NSEvent.mouseLocation, size: .zero)
+        let margin: CGFloat = 8
+        let x = min(
+            max(anchor.midX - calendarPanelSize.width / 2, visibleFrame.minX + margin),
+            visibleFrame.maxX - calendarPanelSize.width - margin
+        )
+        let preferredY = anchor.minY - calendarPanelSize.height - 6
+        let y = max(preferredY, visibleFrame.minY + margin)
+
+        panel.setFrame(NSRect(origin: NSPoint(x: x, y: y), size: calendarPanelSize), display: true)
+    }
+
+    private func statusButtonFrameInScreen() -> NSRect? {
+        guard let button = statusItem?.button, let window = button.window else { return nil }
+        return window.convertToScreen(button.frame)
+    }
+
+    private func isPointInStatusButton(_ windowPoint: NSPoint) -> Bool {
+        guard let button = statusItem?.button else { return false }
+        return button.frame.contains(windowPoint)
     }
 }
