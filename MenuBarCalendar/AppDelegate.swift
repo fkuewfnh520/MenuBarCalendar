@@ -182,7 +182,6 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     func keepCalendarOpenForSettingsPreview() {
         guard let button = statusItem?.button, let popover else { return }
         isSettingsPreviewActive = true
-        closeBackgroundPreviewWindows()
         popover.behavior = .applicationDefined
         if !popover.isShown {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -200,11 +199,5 @@ class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
 
     func popoverShouldClose(_ popover: NSPopover) -> Bool {
         !isSettingsPreviewActive
-    }
-
-    private func closeBackgroundPreviewWindows() {
-        NSApp.windows
-            .filter { $0.title == "背景预览" }
-            .forEach { $0.close() }
     }
 }
