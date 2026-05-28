@@ -309,16 +309,20 @@ struct DayCellView: View {
             }
 
             // Selection / today indicator
-            if day.isToday {
+            if isSelected {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(themeColor.opacity(0.22))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 6)
+                            .stroke(themeColor, lineWidth: 2)
+                    )
+            } else if day.isToday {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(themeColor.opacity(0.15))
                     .overlay(
                         RoundedRectangle(cornerRadius: 4)
                             .stroke(themeColor, lineWidth: 1.5)
                     )
-            } else if isSelected {
-                RoundedRectangle(cornerRadius: 4)
-                    .stroke(themeColor.opacity(0.5), lineWidth: 1)
             }
 
             // Content
@@ -362,7 +366,7 @@ struct DayCellView: View {
 
     private var dayTextColor: Color {
         if !day.isCurrentMonth { return .secondary.opacity(0.3) }
-        if day.isToday { return themeColor }
+        if isSelected || day.isToday { return themeColor }
         if day.holidayInfo != nil { return .green }
         if day.isWeekend && !day.isCompensatoryWorkday { return .red.opacity(0.7) }
         return .primary
@@ -370,6 +374,7 @@ struct DayCellView: View {
 
     private var lunarTextColor: Color {
         if !day.isCurrentMonth { return .secondary.opacity(0.2) }
+        if isSelected { return themeColor.opacity(0.85) }
         if day.festivalText != nil { return .red.opacity(0.75) }
         return .secondary.opacity(0.7)
     }
