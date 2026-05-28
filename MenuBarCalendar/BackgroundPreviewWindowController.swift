@@ -33,7 +33,7 @@ final class BackgroundPreviewWindowController {
 
         let previewWindow = NSPanel(
             contentRect: NSRect(x: 0, y: 0, width: 360, height: 410),
-            styleMask: [.titled, .closable, .nonactivatingPanel, .hudWindow],
+            styleMask: [.titled, .closable, .nonactivatingPanel],
             backing: .buffered,
             defer: false
         )
@@ -47,6 +47,7 @@ final class BackgroundPreviewWindowController {
         previewWindow.level = .floating
         previewWindow.isMovableByWindowBackground = true
         previewWindow.hidesOnDeactivate = false
+        previewWindow.backgroundColor = NSColor.windowBackgroundColor
 
         positionNextToSettingsWindow(previewWindow)
 
