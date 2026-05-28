@@ -311,11 +311,7 @@ struct DayCellView: View {
             // Selection / today indicator
             if isSelected {
                 RoundedRectangle(cornerRadius: 6)
-                    .fill(themeColor.opacity(0.22))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 6)
-                            .stroke(themeColor, lineWidth: 2)
-                    )
+                    .stroke(themeColor, lineWidth: 2)
             } else if day.isToday {
                 RoundedRectangle(cornerRadius: 4)
                     .fill(themeColor.opacity(0.15))
