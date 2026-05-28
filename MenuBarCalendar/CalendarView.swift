@@ -362,7 +362,7 @@ struct DayCellView: View {
 
     private var dayTextColor: Color {
         if !day.isCurrentMonth { return .secondary.opacity(0.3) }
-        if isSelected || day.isToday { return themeColor }
+        if day.isToday { return themeColor }
         if day.holidayInfo != nil { return .green }
         if day.isWeekend && !day.isCompensatoryWorkday { return .red.opacity(0.7) }
         return .primary
@@ -370,7 +370,6 @@ struct DayCellView: View {
 
     private var lunarTextColor: Color {
         if !day.isCurrentMonth { return .secondary.opacity(0.2) }
-        if isSelected { return themeColor.opacity(0.85) }
         if day.festivalText != nil { return .red.opacity(0.75) }
         return .secondary.opacity(0.7)
     }
