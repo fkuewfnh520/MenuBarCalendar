@@ -15,45 +15,11 @@ final class BackgroundPreviewWindowController {
     func startObserving() {}
 
     func stopObserving() {
-        dismissWindow(animated: false)
+        closeAllPreviewWindows()
     }
 
     func showPreview() {
-        dismissTimer?.invalidate()
-
-        if let existingWindow = window, existingWindow.isVisible {
-            positionNextToSettingsWindow(existingWindow)
-            existingWindow.alphaValue = 1
-            scheduleDismiss()
-            return
-        }
-
-        let previewContent = BackgroundPreviewContent()
-        let hostingController = NSHostingController(rootView: previewContent)
-
-        let previewWindow = NSPanel(
-            contentRect: NSRect(x: 0, y: 0, width: 360, height: 410),
-            styleMask: [.titled, .closable, .nonactivatingPanel, .hudWindow],
-            backing: .buffered,
-            defer: false
-        )
-        previewWindow.contentViewController = hostingController
-        hostingController.view.frame = NSRect(x: 0, y: 0, width: 360, height: 410)
-        hostingController.view.layoutSubtreeIfNeeded()
-        previewWindow.contentView?.layoutSubtreeIfNeeded()
-        previewWindow.setContentSize(NSSize(width: 360, height: 410))
-        previewWindow.title = "背景预览"
-        previewWindow.isReleasedWhenClosed = false
-        previewWindow.level = .floating
-        previewWindow.isMovableByWindowBackground = true
-        previewWindow.hidesOnDeactivate = false
-
-        positionNextToSettingsWindow(previewWindow)
-
-        previewWindow.makeKeyAndOrderFront(nil)
-        window = previewWindow
-
-        scheduleDismiss()
+        closeAllPreviewWindows()
     }
 
     // MARK: - Private
@@ -141,6 +107,13 @@ final class BackgroundPreviewWindowController {
     private enum PreviewSide {
         case left
         case right
+    }
+
+    private func closeAllPreviewWindows() {
+        dismissWindow(animated: false)
+        NSApp.windows
+            .filter { $0.title == "背景预览" }
+            .forEach { $0.close() }
     }
 
     private func clamp(_ frame: NSRect, to bounds: NSRect) -> NSRect {

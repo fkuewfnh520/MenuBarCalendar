@@ -212,7 +212,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         (NSApp.delegate as? AppDelegate)?.keepCalendarOpenForSettingsPreview()
 
         if let existingWindow = window, existingWindow.isVisible {
-            center(existingWindow)
+            center(existingWindow, on: anchorWindow?.screen)
             existingWindow.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
@@ -231,7 +231,7 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         window.title = "设置"
         window.isReleasedWhenClosed = false
         window.delegate = self
-        center(window)
+        center(window, on: anchorWindow?.screen)
         window.makeKeyAndOrderFront(nil)
         NSApp.activate(ignoringOtherApps: true)
 
@@ -245,9 +245,8 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
         }
     }
 
-    private func center(_ window: NSWindow) {
-        let fallbackPoint = NSEvent.mouseLocation
-        let screen = NSScreen.screens.first { $0.frame.contains(fallbackPoint) } ?? NSScreen.main
+    private func center(_ window: NSWindow, on preferredScreen: NSScreen?) {
+        let screen = preferredScreen ?? NSScreen.main
         guard let visibleFrame = screen?.visibleFrame else {
             window.center()
             return

@@ -2,11 +2,12 @@ import Cocoa
 import SwiftUI
 import Combine
 
-class AppDelegate: NSObject, NSApplicationDelegate {
+class AppDelegate: NSObject, NSApplicationDelegate, NSPopoverDelegate {
     private var statusItem: NSStatusItem?
     private var popover: NSPopover?
     private var cancellables = Set<AnyCancellable>()
     private var timer: Timer?
+    private var isSettingsPreviewActive = false
     private let statusTitleFont = NSFont.monospacedDigitSystemFont(ofSize: NSFont.systemFontSize, weight: .regular)
 
     func applicationDidFinishLaunching(_ notification: Notification) {
@@ -15,6 +16,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         let popover = NSPopover()
         popover.contentSize = NSSize(width: 360, height: 480)
         popover.behavior = .transient
+        popover.delegate = self
         popover.contentViewController = NSHostingController(rootView: contentView)
         self.popover = popover
 
@@ -168,6 +170,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem?.button else { return }
         if let popover = popover {
             if popover.isShown {
+                guard !isSettingsPreviewActive else { return }
                 popover.performClose(sender)
             } else {
                 popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -178,6 +181,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func keepCalendarOpenForSettingsPreview() {
         guard let button = statusItem?.button, let popover else { return }
+        isSettingsPreviewActive = true
+        closeBackgroundPreviewWindows()
         popover.behavior = .applicationDefined
         if !popover.isShown {
             popover.show(relativeTo: button.bounds, of: button, preferredEdge: .minY)
@@ -186,9 +191,20 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
     func closeSettingsPreviewCalendar() {
         guard let popover else { return }
+        isSettingsPreviewActive = false
         popover.behavior = .transient
         if popover.isShown {
             popover.performClose(nil)
         }
+    }
+
+    func popoverShouldClose(_ popover: NSPopover) -> Bool {
+        !isSettingsPreviewActive
+    }
+
+    private func closeBackgroundPreviewWindows() {
+        NSApp.windows
+            .filter { $0.title == "背景预览" }
+            .forEach { $0.close() }
     }
 }
