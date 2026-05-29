@@ -73,25 +73,25 @@ https://www.shuyz.com/githubfiles/china-holiday-calender/master/holidayCal.ics
 
 ### 发布通用版
 
-项目已配置为标准 macOS 通用架构，Release 构建会同时包含 Apple Silicon (`arm64`) 和 Intel (`x86_64`)。
+项目已显式配置为 macOS 通用架构，Release 构建会同时包含 Apple Silicon (`arm64`) 和 Intel (`x86_64`)。
 
-发布给其他 Mac 使用时，建议在 Xcode 中使用 **Any Mac** / **Generic Mac** 或 **Archive** 方式构建；如果直接从当前机器的运行产物中取 `.app`，可能只包含当前机器的架构。
+发布给其他 Mac 使用时，建议在 Xcode 中选择 **Any Mac** / **Generic Mac**，或使用 **Product > Archive** 构建；不要选择 **My Mac** / **My Mac (Designed for iPad)** 这类当前设备目的地来导出安装包，否则 Xcode 可能只保留当前机器架构，Finder 会显示为「应用程序 (Apple 芯片)」。
 
 也可以用命令行构建并验证：
 
 ```bash
-xcodebuild -scheme MenuBarCalendar -configuration Release -destination generic/platform=macOS build
-lipo -info "path/to/万年历.app/Contents/MacOS/万年历"
+xcodebuild -scheme MenuBarCalendar -configuration Release -destination generic/platform=macOS -derivedDataPath /tmp/MenuBarCalendarBuild build
+lipo -info "/tmp/MenuBarCalendarBuild/Build/Products/Release/万年历.app/Contents/MacOS/万年历"
 ```
 
-验证结果应同时包含 `x86_64` 和 `arm64`。
+验证结果应为类似 `Architectures in the fat file ... are: x86_64 arm64`，Finder 中会显示为「应用程序 (通用)」。
 
 ## 项目结构
 
 ```
 MenuBarCalendar/
 ├── MenuBarCalendarApp.swift   # 应用入口
-├── AppDelegate.swift          # 菜单栏管理 (NSStatusItem + NSPopover)
+├── AppDelegate.swift          # 菜单栏管理 (NSStatusItem + NSPanel)
 ├── CalendarView.swift         # SwiftUI 日历视图 + 日期方块
 ├── CalendarViewModel.swift    # 日历数据逻辑 + 底部栏数据
 ├── ChineseHolidays.swift      # 中国法定节假日订阅、缓存与离线兜底
