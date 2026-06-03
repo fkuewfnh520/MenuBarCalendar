@@ -228,6 +228,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     private func showCalendarPanel() {
         guard let panel = calendarPanel else { return }
         hideAnimationToken += 1
+        NotificationCenter.default.post(name: .calendarPanelWillShow, object: nil)
         positionCalendarPanel(panel)
 
         guard !panel.isVisible else {

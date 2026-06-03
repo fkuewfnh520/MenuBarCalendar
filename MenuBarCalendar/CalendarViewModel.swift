@@ -40,7 +40,6 @@ final class CalendarViewModel: ObservableObject {
 
     private var displayedMonth: Date
     private var calendar: Calendar
-    private let today: Date
     private var timer: Timer?
     private var weekStartsOnMonday: Bool
     private var cancellables = Set<AnyCancellable>()
@@ -50,15 +49,15 @@ final class CalendarViewModel: ObservableObject {
         cal.locale = Locale(identifier: "zh_CN")
         cal.timeZone = TimeZone(identifier: "Asia/Shanghai")!
         self.calendar = cal
-        self.today = Date()
-        self.displayedMonth = today
+        let initialToday = Date()
+        self.displayedMonth = initialToday
         self.weekStartsOnMonday = AppSettings.shared.weekStartsOn == 1
 
         if weekStartsOnMonday {
             self.calendar.firstWeekday = 2
         }
 
-        let currentYear = calendar.component(.year, from: today)
+        let currentYear = calendar.component(.year, from: initialToday)
         self.displayedYear = currentYear
         self.yearRange = Array((currentYear - 50)...(currentYear + 50))
 
@@ -179,14 +178,20 @@ final class CalendarViewModel: ObservableObject {
     }
 
     func goToToday() {
+        let today = Date()
         displayedMonth = today
         displayedYear = calendar.component(.year, from: today)
+        updateYearRange(around: displayedYear)
         HolidayStore.shared.ensureYearAvailable(displayedYear)
         selectedDate = nil
         selectedHolidayInfo = nil
         bottomBarDate = nil
         buildMonth()
         updateBottomBar()
+    }
+
+    func refreshForPresentation() {
+        goToToday()
     }
 
     func select(_ day: DayItem) {
@@ -223,7 +228,7 @@ final class CalendarViewModel: ObservableObject {
 
         var items: [DayItem] = []
 
-        let todayComponents = calendar.dateComponents([.year, .month, .day], from: today)
+        let todayComponents = calendar.dateComponents([.year, .month, .day], from: Date())
 
         for i in 0 ..< gridSize {
             let offset = i - firstDayOffset
@@ -251,5 +256,16 @@ final class CalendarViewModel: ObservableObject {
         }
 
         days = items
+    }
+
+    private func updateYearRange(around year: Int) {
+        guard yearRange.first != nil else {
+            yearRange = Array((year - 50)...(year + 50))
+            return
+        }
+
+        if !yearRange.contains(year) {
+            yearRange = Array((year - 50)...(year + 50))
+        }
     }
 }

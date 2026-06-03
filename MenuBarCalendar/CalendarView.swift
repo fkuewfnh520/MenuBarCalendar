@@ -1,6 +1,10 @@
 import AppKit
 import SwiftUI
 
+extension Notification.Name {
+    static let calendarPanelWillShow = Notification.Name("calendarPanelWillShow")
+}
+
 // MARK: - CalendarView
 
 struct CalendarView: View {
@@ -36,6 +40,9 @@ struct CalendarView: View {
         .background(calendarBackground)
         .environment(\.colorScheme, .light)
         .onChange(of: settings.weekStartsOn) { _ in vm.updateWeekStart(settings.weekStartsOn) }
+        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillShow)) { _ in
+            vm.refreshForPresentation()
+        }
     }
 
     private var calendarBackground: some View {
