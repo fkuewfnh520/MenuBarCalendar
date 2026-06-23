@@ -26,10 +26,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             updateStatusBarDisplay()
         }
 
-        // Update every second to keep time accurate
-        timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
-            self?.updateStatusBarDisplay()
-        }
+        scheduleNextStatusBarUpdate()
 
         // Observe settings changes
         let settings = AppSettings.shared
@@ -38,6 +35,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             .sink { [weak self] _ in
                 DispatchQueue.main.async {
                     self?.updateStatusBarDisplay()
+                    self?.scheduleNextStatusBarUpdate()
                 }
             }
             .store(in: &cancellables)
@@ -60,6 +58,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         button.image = nil
         button.attributedTitle = statusAttributedTitle(for: now, settings: settings)
         statusItem?.length = reservedStatusItemLength(for: now, settings: settings)
+    }
+
+    private func scheduleNextStatusBarUpdate() {
+        timer?.invalidate()
+
+        let interval = nextStatusBarUpdateInterval(settings: AppSettings.shared)
+        let newTimer = Timer.scheduledTimer(withTimeInterval: interval, repeats: false) { [weak self] _ in
+            self?.updateStatusBarDisplay()
+            self?.scheduleNextStatusBarUpdate()
+        }
+        newTimer.tolerance = AppSettings.shared.showSeconds ? 0.05 : 1
+        timer = newTimer
+    }
+
+    private func nextStatusBarUpdateInterval(settings: AppSettings) -> TimeInterval {
+        if settings.showSeconds {
+            return 1
+        }
+
+        let second = Calendar(identifier: .gregorian).component(.second, from: Date())
+        return TimeInterval(max(1, 60 - second))
     }
 
     private func statusAttributedTitle(for date: Date, settings: AppSettings) -> NSAttributedString {
@@ -106,18 +125,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 return settings.showIcon ? .icon : nil
             case .weekday:
                 guard settings.showWeekdayInStatusBar else { return nil }
-                let formatter = DateFormatter()
-                formatter.locale = Locale(identifier: "zh_CN")
-                formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-                formatter.dateFormat = "EEE"
-                return .text(formatter.string(from: date))
+                return .text(Self.statusWeekdayFormatter.string(from: date))
             case .solar:
                 guard settings.showSolarInStatusBar else { return nil }
-                let formatter = DateFormatter()
-                formatter.locale = Locale(identifier: "zh_CN")
-                formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-                formatter.dateFormat = "yyyy年M月d日"
-                return .text(formatter.string(from: date))
+                return .text(Self.statusDateFormatter.string(from: date))
             case .lunar:
                 guard settings.showLunarInStatusBar else { return nil }
                 return .text(LunarCalendar.monthDayText(for: date))
@@ -138,20 +149,16 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     private func statusTimeText(for date: Date, settings: AppSettings) -> String {
-        let timeFormatter = DateFormatter()
-        timeFormatter.locale = Locale(identifier: "zh_CN")
-        timeFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        
         if settings.use24HourFormat {
-            timeFormatter.dateFormat = settings.showSeconds ? "HH:mm:ss" : "HH:mm"
+            Self.statusTimeFormatter.dateFormat = settings.showSeconds ? "HH:mm:ss" : "HH:mm"
         } else {
             if settings.showAMPM {
-                timeFormatter.dateFormat = settings.showSeconds ? "a h:mm:ss" : "a h:mm"
+                Self.statusTimeFormatter.dateFormat = settings.showSeconds ? "a h:mm:ss" : "a h:mm"
             } else {
-                timeFormatter.dateFormat = settings.showSeconds ? "h:mm:ss" : "h:mm"
+                Self.statusTimeFormatter.dateFormat = settings.showSeconds ? "h:mm:ss" : "h:mm"
             }
         }
-        return timeFormatter.string(from: date)
+        return Self.statusTimeFormatter.string(from: date)
     }
 
     private func reservedStatusItemLength(for date: Date, settings: AppSettings) -> CGFloat {
@@ -257,6 +264,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         } completionHandler: { [weak self, weak panel] in
             guard let self, token == self.hideAnimationToken else { return }
             panel?.orderOut(nil)
+            NotificationCenter.default.post(name: .calendarPanelDidHide, object: nil)
         }
     }
 
@@ -328,4 +336,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         guard let button = statusItem?.button else { return false }
         return button.frame.contains(windowPoint)
     }
+
+    private static let statusWeekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "EEE"
+        return formatter
+    }()
+
+    private static let statusDateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy年M月d日"
+        return formatter
+    }()
+
+    private static let statusTimeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        return formatter
+    }()
 }

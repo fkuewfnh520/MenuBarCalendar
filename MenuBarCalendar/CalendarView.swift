@@ -3,6 +3,7 @@ import SwiftUI
 
 extension Notification.Name {
     static let calendarPanelWillShow = Notification.Name("calendarPanelWillShow")
+    static let calendarPanelDidHide = Notification.Name("calendarPanelDidHide")
 }
 
 // MARK: - CalendarView
@@ -42,6 +43,9 @@ struct CalendarView: View {
         .onChange(of: settings.weekStartsOn) { _ in vm.updateWeekStart(settings.weekStartsOn) }
         .onReceive(NotificationCenter.default.publisher(for: .calendarPanelWillShow)) { _ in
             vm.refreshForPresentation()
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .calendarPanelDidHide)) { _ in
+            vm.pausePresentationUpdates()
         }
     }
 

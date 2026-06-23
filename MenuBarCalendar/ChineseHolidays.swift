@@ -54,6 +54,7 @@ final class HolidayStore: ObservableObject {
 
     func isWorkday(_ date: Date) -> Bool {
         let key = Self.dateFormatter.string(from: date)
+        guard !Self.nonWorkdayCorrections.contains(key) else { return false }
         return remoteWorkdays.contains(key) || Self.bundledWorkdays.contains(key)
     }
 
@@ -219,6 +220,7 @@ final class HolidayStore: ObservableObject {
         }
 
         for date in yearData.workdays {
+            guard !Self.nonWorkdayCorrections.contains(date) else { continue }
             remoteWorkdays.insert(date)
             remoteHolidays.removeValue(forKey: date)
         }
@@ -321,8 +323,11 @@ final class HolidayStore: ObservableObject {
         "2026-01-04",
         "2026-02-14", "2026-02-28",
         "2026-05-09",
-        "2026-06-28",
         "2026-10-10",
+    ]
+
+    private static let nonWorkdayCorrections: Set<String> = [
+        "2026-06-28",
     ]
 }
 

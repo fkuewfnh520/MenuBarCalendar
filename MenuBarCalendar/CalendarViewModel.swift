@@ -66,7 +66,6 @@ final class CalendarViewModel: ObservableObject {
         HolidayStore.shared.ensureYearAvailable(currentYear)
         buildMonth()
         updateBottomBar()
-        startTimer()
     }
 
     private func bindHolidayUpdates() {
@@ -85,11 +84,18 @@ final class CalendarViewModel: ObservableObject {
     // MARK: - Timer
 
     private func startTimer() {
+        guard timer == nil else { return }
         timer = Timer.scheduledTimer(withTimeInterval: 1, repeats: true) { [weak self] _ in
             Task { @MainActor in
                 self?.updateBottomBar()
             }
         }
+        timer?.tolerance = 0.1
+    }
+
+    private func stopTimer() {
+        timer?.invalidate()
+        timer = nil
     }
 
     private func updateBottomBar() {
@@ -98,32 +104,18 @@ final class CalendarViewModel: ObservableObject {
 
         let settings = AppSettings.shared
 
-        let timeFormatter = DateFormatter()
-        timeFormatter.locale = Locale(identifier: "zh_CN")
-        timeFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-
         if settings.use24HourFormat {
-            timeFormatter.dateFormat = settings.showSeconds ? "HH:mm:ss" : "HH:mm"
+            Self.timeFormatter.dateFormat = settings.showSeconds ? "HH:mm:ss" : "HH:mm"
         } else {
             if settings.showAMPM {
-                timeFormatter.dateFormat = settings.showSeconds ? "a h:mm:ss" : "a h:mm"
+                Self.timeFormatter.dateFormat = settings.showSeconds ? "a h:mm:ss" : "a h:mm"
             } else {
-                timeFormatter.dateFormat = settings.showSeconds ? "h:mm:ss" : "h:mm"
+                Self.timeFormatter.dateFormat = settings.showSeconds ? "h:mm:ss" : "h:mm"
             }
         }
-        currentTimeString = timeFormatter.string(from: now)
-
-        let weekdayFormatter = DateFormatter()
-        weekdayFormatter.locale = Locale(identifier: "zh_CN")
-        weekdayFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        weekdayFormatter.dateFormat = "EEEE"
-        currentWeekdayString = weekdayFormatter.string(from: displayDate)
-
-        let dateFormatter = DateFormatter()
-        dateFormatter.locale = Locale(identifier: "zh_CN")
-        dateFormatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
-        dateFormatter.dateFormat = "yyyy年M月d日"
-        currentDateString = dateFormatter.string(from: displayDate)
+        currentTimeString = Self.timeFormatter.string(from: now)
+        currentWeekdayString = Self.weekdayFormatter.string(from: displayDate)
+        currentDateString = Self.dateFormatter.string(from: displayDate)
 
         currentLunarString = LunarCalendar.monthDayAndFestivalText(for: displayDate)
     }
@@ -191,7 +183,12 @@ final class CalendarViewModel: ObservableObject {
     }
 
     func refreshForPresentation() {
+        startTimer()
         goToToday()
+    }
+
+    func pausePresentationUpdates() {
+        stopTimer()
     }
 
     func select(_ day: DayItem) {
@@ -268,4 +265,27 @@ final class CalendarViewModel: ObservableObject {
             yearRange = Array((year - 50)...(year + 50))
         }
     }
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        return formatter
+    }()
+
+    private static let weekdayFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "EEEE"
+        return formatter
+    }()
+
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.locale = Locale(identifier: "zh_CN")
+        formatter.timeZone = TimeZone(identifier: "Asia/Shanghai")
+        formatter.dateFormat = "yyyy年M月d日"
+        return formatter
+    }()
 }
