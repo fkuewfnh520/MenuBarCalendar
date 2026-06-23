@@ -299,7 +299,7 @@ final class HolidayStore: ObservableObject {
         map["2026-01-01"] = HolidayInfo(name: "元旦", emoji: "🎍")
         map["2026-01-02"] = HolidayInfo(name: "元旦", emoji: "🎍")
         map["2026-01-03"] = HolidayInfo(name: "元旦", emoji: "🎍")
-        for d in 17...23 { map["2026-02-\(String(format: "%02d", d))"] = HolidayInfo(name: "春节", emoji: "🧧") }
+        for d in 15...23 { map["2026-02-\(String(format: "%02d", d))"] = HolidayInfo(name: "春节", emoji: "🧧") }
         for d in 4...6 { map["2026-04-\(String(format: "%02d", d))"] = HolidayInfo(name: "清明节", emoji: "🌿") }
         for d in 1...5 { map["2026-05-\(String(format: "%02d", d))"] = HolidayInfo(name: "劳动节", emoji: "👷") }
         for d in 19...21 { map["2026-06-\(String(format: "%02d", d))"] = HolidayInfo(name: "端午节", emoji: "🐲") }
@@ -323,6 +323,7 @@ final class HolidayStore: ObservableObject {
         "2026-01-04",
         "2026-02-14", "2026-02-28",
         "2026-05-09",
+        "2026-09-20",
         "2026-10-10",
     ]
 
